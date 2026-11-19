@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auspacific 貼文審核</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">AUSPACIFIC</span><span class="sub">貼文審核 · Post review</span></div>
+  <button id="settingsBtn" class="ghost" type="button">設定</button>
+</header>
+
+<main>
+  <section id="listView">
+    <nav class="tabs" id="tabs">
+      <button data-filter="content" class="active" type="button">① 內容審核</button>
+      <button data-filter="making" type="button">② 製作中</button>
+      <button data-filter="final" type="button">③ 成品審核</button>
+      <button data-filter="scheduled" type="button">④ 已排程</button>
+      <button data-filter="done" type="button">已發布／退回</button>
+      <button data-filter="all" type="button">全部</button>
+      <button id="refreshBtn" class="ghost" type="button" title="重新載入">↻</button>
+    </nav>
+    <p id="listMsg" class="muted"></p>
+    <div id="postList"></div>
+  </section>
+
+  <section id="detailView" hidden>
+    <button id="backBtn" class="ghost" type="button">← 返回列表</button>
+    <div id="detail"></div>
+  </section>
+</main>
+
+<dialog id="settingsDlg">
+  <form method="dialog" id="settingsForm">
+    <h2>連線設定</h2>
+    <label>GitHub repo（owner/name）<input name="repo" required placeholder="your-account/auspacific-social"></label>
+    <label>Branch<input name="branch" value="main" required></label>
+    <label>Access token
+      <input name="token" type="password" required autocomplete="off" placeholder="github_pat_…">
+      <small>Fine-grained token for this repo only, with Contents: Read and write. It's stored only in this browser.</small>
+    </label>
+    <menu><button value="cancel" class="ghost" formnovalidate>取消</button><button value="save" class="primary">儲存</button></menu>
+  </form>
+</dialog>
+
+<dialog id="confirmDlg">
+  <form method="dialog">
+    <h2 id="confirmTitle">確認</h2>
+    <div id="confirmBody"></div>
+    <menu><button value="cancel" class="ghost">取消</button><button value="ok" class="primary">確認</button></menu>
+  </form>
+</dialog>
+
+<div id="toast" role="status" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
