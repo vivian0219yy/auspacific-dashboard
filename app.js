@@ -32,6 +32,7 @@ const FIELD_LABELS = {
   tag: "系列標籤", headline_1: "標題第一行", headline_2: "標題第二行（【】內為金色重點字）", title: "頁標題",
   rows: "數據列", label: "項目", value: "數字", source_line: "資料來源列", items: "清單項目",
   headline: "標題", cta: "行動呼籲", counter: "頁碼",
+  subhead: "副標（一句話）", note: "說明", text: "項目", detail: "補充說明", paragraphs: "段落",
 };
 // Mirrors brand.json "never" rules.
 const BANNED = ["保證", "穩賺", "必漲", "高報酬", "翻倍", "保本", "零風險", "搶手", "最後機會", "錯過不再", "LINE ID", "line.me"];
@@ -295,6 +296,7 @@ function designTextPanel(p, editable) {
   if (!Array.isArray(p.design_text) || !p.design_text.length) return "";
   const dis = editable ? "" : "disabled";
   const input = (path, val) => `<input data-dt="${path}" value="${esc(val)}" ${dis}><small class="muted">${[...String(val || "")].length} 字</small>`;
+  const area = (path, val) => `<textarea data-dt="${path}" rows="3" style="min-height:0" ${dis}>${esc(val)}</textarea><small class="muted">${[...String(val || "")].length} 字</small>`;
   let html = editable
     ? `<div class="panel"><h3>圖片上的文字</h3><p class="muted" style="margin-top:0">字數請盡量符合範本限制；清空的項目會在製作時刪掉。</p>`
     : `<details class="panel"><summary><h3>圖片上的文字（已核准）</h3></summary><p class="muted">要改圖片上的字，請按「在 Canva 編輯設計」，改完再按「重新匯出」。</p>`;
@@ -307,8 +309,10 @@ function designTextPanel(p, editable) {
       else if (Array.isArray(v)) {
         html += `<div class="dt-list"><div class="dt-list-label">${esc(label)}</div>`;
         v.forEach((item, j) => {
-          if (typeof item === "string") html += `<label class="inline">${j + 1}.${input(`${i}.${k}.${j}`, item)}</label>`;
-          else html += `<div class="row">${Object.entries(item).map(([kk, vv]) => `<label>${esc(FIELD_LABELS[kk] || kk)}${input(`${i}.${k}.${j}.${kk}`, vv)}</label>`).join("")}</div>`;
+          if (typeof item === "string") html += k === "paragraphs"
+            ? `<label>${esc(label)} ${j + 1}${area(`${i}.${k}.${j}`, item)}</label>`
+            : `<label class="inline">${j + 1}.${input(`${i}.${k}.${j}`, item)}</label>`;
+          else html += `<div class="row dt-item">${Object.entries(item).map(([kk, vv]) => `<label>${esc(FIELD_LABELS[kk] || kk)}${input(`${i}.${k}.${j}.${kk}`, vv)}</label>`).join("")}</div>`;
         });
         html += `</div>`;
       }
