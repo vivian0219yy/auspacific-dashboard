@@ -1,4 +1,6 @@
 import { approvalHash, finalCaption } from "./approval.js";
+import { postPages } from "./templates.js";
+let siteCfg = { brand: {}, templates: {} };
 
 // ---------- constants ----------
 const TZ_OFFSET = "+08:00"; // Asia/Taipei, no daylight saving
@@ -32,7 +34,10 @@ const FIELD_LABELS = {
   tag: "系列標籤", headline_1: "標題第一行", headline_2: "標題第二行（【】內為金色重點字）", title: "頁標題",
   rows: "數據列", label: "項目", value: "數字", source_line: "資料來源列", items: "清單項目",
   headline: "標題", cta: "行動呼籲", counter: "頁碼",
-  subhead: "副標（一句話）", note: "說明", text: "項目", detail: "補充說明", paragraphs: "段落",
+  subhead: "副標（一句話）", note: "註解", text: "內容", detail: "補充說明", paragraphs: "段落",
+  series: "系列小標", keyword: "大字關鍵字", sub: "副標", teaser: "引言", label: "頁首小標", intro: "說明文字",
+  key: "項目", items: "條列", notes: "小字備註", steps: "流程步驟", cautions: "風險提醒", box: "諮詢框",
+  kicker: "框內小標", reply: "回覆文字", highlight: "重點標示（底部）",
 };
 // Mirrors brand.json "never" rules.
 const BANNED = ["保證", "穩賺", "必漲", "高報酬", "翻倍", "保本", "零風險", "搶手", "最後機會", "錯過不再", "LINE ID", "line.me"];
@@ -205,6 +210,7 @@ function lint(post, stage) {
     if (!post.publish_at) issues.push(["bad", "沒有設定發布時間"]);
     else if (new Date(post.publish_at) < new Date()) issues.push(["bad", "發布時間已經過了"]);
     else if (!/T\d\d:(00|30):00/.test(post.publish_at)) issues.push(["bad", "發布時間請選整點或半點（系統在 :00 和 :30 發布）"]);
+    else { const hh = +splitLocal(post.publish_at)[1].slice(0, 2); if (hh < 8 || hh > 23) issues.push(["bad", "發布時間請在 08:00–23:30 之間（台北時間）"]); }
     if (post.format === "story") issues.push(["bad", "限動要在 IG App 手動發（投票／問答貼紙無法用 API 發布）"]);
   }
   for (const c of post.checks || []) issues.push([c.level || "warn", `系統檢查：${c.message}`]);
@@ -225,11 +231,15 @@ function reelConsistency(post) {
 }
 
 // ---------- list view ----------
+async function readCfg(name) {
+  try { return JSON.parse(b64decode((await (await gh(`contents/config/${name}.json?${ref()}`)).json()).content)); } catch { return {}; }
+}
 async function refreshList() {
   $("#listMsg").textContent = "載入中…";
   $("#postList").innerHTML = "";
   try {
-    posts = await listPosts();
+    const [ps, b, t] = await Promise.all([listPosts(), readCfg("brand"), readCfg("templates")]);
+    posts = ps; siteCfg = { brand: b, templates: t };
   } catch (e) {
     $("#listMsg").textContent = e.message;
     return;
@@ -301,11 +311,15 @@ function designTextPanel(p, editable) {
     ? `<div class="panel"><h3>圖片上的文字</h3><p class="muted" style="margin-top:0">字數請盡量符合範本限制；清空的項目會在製作時刪掉。</p>`
     : `<details class="panel"><summary><h3>圖片上的文字（已核准）</h3></summary><p class="muted">要改圖片上的字，請按「在 Canva 編輯設計」，改完再按「重新匯出」。</p>`;
   p.design_text.forEach((pg, i) => {
-    html += `<fieldset class="dt-page"><legend>第 ${esc(pg.page)} 頁 · ${esc(pg.role || "")}</legend>`;
+    const KIND = { cover: "封面", table: "表格", list: "條列", flow: "流程", checklist: "清單", cta: "行動呼籲" };
+    html += `<fieldset class="dt-page"><legend>第 ${i + 1} 頁 · ${esc(KIND[pg.kind] || pg.kind || pg.role || "")}</legend>`;
     for (const [k, v] of Object.entries(pg)) {
-      if (k === "page" || k === "role") continue;
+      if (k === "page" || k === "role" || k === "kind") continue;
       const label = FIELD_LABELS[k] || k;
       if (typeof v === "string") html += `<label>${esc(label)}${input(`${i}.${k}`, v)}</label>`;
+      else if (v && typeof v === "object" && !Array.isArray(v)) {
+        html += `<div class="dt-list"><div class="dt-list-label">${esc(label)}</div><div class="row dt-item">${Object.entries(v).map(([kk, vv]) => `<label>${esc(FIELD_LABELS[kk] || kk)}${input(`${i}.${k}.${kk}`, vv)}</label>`).join("")}</div></div>`;
+      }
       else if (Array.isArray(v)) {
         html += `<div class="dt-list"><div class="dt-list-label">${esc(label)}</div>`;
         v.forEach((item, j) => {
@@ -358,9 +372,9 @@ function renderDetail(selectedMedia = 0) {
       <div class="media-strip">${names.length > 1 ? names.map((n, i) => current.media[n]?.url && !/\.(mp4|mov)$/i.test(n)
         ? `<img src="${current.media[n].url}" data-i="${i}" class="${i === selectedMedia ? "active" : ""}" alt="${i + 1}">` : "").join("") : ""}</div>
       <p class="muted" style="margin:8px 0 0">${names.length} 個檔案 · ${esc(p.format)}
-        ${p.canva?.edit_url ? ` · <a href="${esc(p.canva.edit_url)}" target="_blank" rel="noopener">在 Canva 編輯設計 ↗</a>` : ""}</p>
+</p>
     </div>` : `<div class="panel"><p class="muted" style="margin:0">${stage === "content"
-      ? "內容核准後，系統會在下一個平日 10:13 用 Canva 範本製作圖片。"
+      ? "內容核准後，系統會自動產生圖片（約 2–3 分鐘），完成後出現在 ③ 成品審核。"
       : p.format === "reel" ? "拍好後在下方上傳影片。" : "尚無圖片。"}</p></div>`;
 
   const uploadPanel = p.status === "ready_to_film" || (p.format === "reel" && stage === "final") ? `<div class="panel">
@@ -378,7 +392,7 @@ function renderDetail(selectedMedia = 0) {
   </div>
   <div class="detail-grid">
     <div>
-      ${mediaPanel}
+      ${stage === "content" && Array.isArray(p.design_text) && p.design_text.length ? `<div class="panel"><h3>圖片即時預覽</h3><p class="muted" style="margin-top:0">邊改邊看；核准內容後會依這個樣子產生圖片。</p><div class="pv" id="pv"></div></div>` : mediaPanel}
       ${uploadPanel}
       <div class="panel">
         <h3>檢查</h3>
@@ -431,7 +445,7 @@ function renderDetail(selectedMedia = 0) {
         ${editable ? `<button type="button" data-act="save">儲存修改</button>` : ""}
         ${stage === "content" ? `<button type="button" data-act="approveContent" class="gold">核准內容，開始製作</button>` : ""}
         ${p.status === "content_approved" ? `<button type="button" data-act="backToContent">撤回，改回內容審核</button>` : ""}
-        ${stage === "final" && p.canva?.design_id ? `<button type="button" data-act="reexport">我改了 Canva 設計，重新匯出</button>` : ""}
+        ${stage === "final" && p.production === "auto" ? `<button type="button" data-act="backToContent">退回修改圖片文字</button>` : ""}
         ${stage === "final" ? `<button type="button" data-act="approve" class="gold">核准成品並排程</button>` : ""}
         ${p.status === "approved" ? `<button type="button" data-act="unschedule">取消排程</button>` : ""}
         ${stage !== "other" || ["content_approved", "ready_to_film"].includes(p.status) ? `<button type="button" data-act="reject" class="danger ghost">退回</button>` : ""}
@@ -448,9 +462,26 @@ function renderDetail(selectedMedia = 0) {
   };
   const cap = $("#fCaption"), tags = $("#fTags");
   if (cap) { cap.oninput = tags.oninput = updatePreview; updatePreview(); }
+  if ($("#pv")) {
+    drawPreview();
+    for (const el of document.querySelectorAll("[data-dt]")) el.addEventListener("input", () => { clearTimeout(drawPreview.t); drawPreview.t = setTimeout(() => { collectForm(); drawPreview(); }, 400); });
+  }
   for (const b of document.querySelectorAll("[data-act]")) b.onclick = () => act(b.dataset.act);
   $("#uploadBtn")?.addEventListener("click", uploadVideo);
 }
+
+function drawPreview() {
+  const box = $("#pv"); if (!box) return;
+  let htmls = [];
+  try { htmls = postPages(current.post, siteCfg.brand, siteCfg.templates); } catch (e) { box.textContent = "預覽失敗：" + e.message; return; }
+  const old = box.querySelectorAll("iframe");
+  if (old.length !== htmls.length) box.innerHTML = htmls.map(() => `<div class="pvf"><iframe sandbox="allow-scripts" scrolling="no"></iframe></div>`).join("");
+  box.querySelectorAll("iframe").forEach((f, i) => {
+    if (f.srcdoc !== htmls[i]) f.srcdoc = htmls[i];
+    f.style.transform = `scale(${f.parentElement.clientWidth / 1080})`;
+  });
+}
+window.addEventListener("resize", () => drawPreview());
 
 function setPath(obj, path, val) {
   const keys = path.split(".");
@@ -574,14 +605,9 @@ async function act(kind) {
       await savePost(current, `Edit ${current.id}`);
       toast("已儲存");
     } else if (kind === "backToContent") {
-      p.status = "content_review"; stamp(p, "content approval withdrawn");
+      p.status = "content_review"; delete p.approval; stamp(p, "back to content review");
       await savePost(current, `Withdraw content approval ${current.id}`);
       toast("已改回內容審核");
-    } else if (kind === "reexport") {
-      p.status = "needs_export"; delete p.approval;
-      stamp(p, "re-export requested", "design edited in Canva");
-      await savePost(current, `Request re-export of ${current.id}`);
-      toast("已送出。下一個平日 10:13 會重新匯出，完成後回到成品審核。");
     } else if (kind === "unschedule") {
       p.status = "design_review"; delete p.approval; stamp(p, "unscheduled");
       await savePost(current, `Unschedule ${current.id}`);
