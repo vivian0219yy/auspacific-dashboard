@@ -11,25 +11,30 @@ export const THEMES = {
   navy: {
     name: "深藍＋香檳金",
     coverBg: "#1D2A4A", coverInk: "#FFFFFF", coverAccent: "#D4C27A", coverMuted: "#C9CFDC",
+    logoFile: "gold", coverLabel: "澳洲置產筆記", coverBar: "", kwBand: "transparent", pills: false,
     bg: "#F8F7F3", ink: "#1D2A4A", body: "#2E3445", muted: "#6B6E78", key: "#1D2A4A",
     accent: "#1D2A4A", hlBg: "#E6D795", hlInk: "#1D2A4A", line: "#BDBBB4",
     boxBg: "#1D2A4A", boxInk: "#FFFFFF", boxMuted: "#D4C27A", kwBg: "#E6D795", kwInk: "#1D2A4A",
   },
   blue: {
     name: "藍＋淺灰白",
-    coverBg: "#1A57A0", coverInk: "#FFFFFF", coverAccent: "#FFFFFF", coverMuted: "#D6E3F3",
+    coverBg: "#F4F6FA", coverInk: "#1E2A44", coverAccent: "#1A57A0", coverMuted: "#66708A",
+    logoFile: "blue", coverLabel: "墨爾本留學筆記", coverBar: "#1A57A0", kwBand: "#CFDFF2", pills: true,
     bg: "#F4F6FA", ink: "#1E2A44", body: "#2E3A52", muted: "#66708A", key: "#1A57A0",
     accent: "#1A57A0", hlBg: "#D3E2F4", hlInk: "#1A57A0", line: "#BCC3D1",
     boxBg: "#1A57A0", boxInk: "#FFFFFF", boxMuted: "#D6E3F3", kwBg: "#D3E2F4", kwInk: "#1A57A0",
   },
   charcoal: {
     name: "炭黑＋陶土橘",
-    coverBg: "#14171F", coverInk: "#FFFFFF", coverAccent: "#D96B2A", coverMuted: "#C9CBD1",
+    coverBg: "#1A1D27", coverInk: "#FFFFFF", coverAccent: "#D96B2A", coverMuted: "#C9CBD1",
+    logoFile: "white", coverLabel: "澳洲置產筆記", coverBar: "", kwBand: "transparent", pills: false,
     bg: "#FFFFFF", ink: "#1E2742", body: "#2E3445", muted: "#6B6E78", key: "#1E2742",
     accent: "#D96B2A", hlBg: "#F7D9C4", hlInk: "#C2541A", line: "#C8C7CC",
     boxBg: "#D96B2A", boxInk: "#FFFFFF", boxMuted: "#FBE3D3", kwBg: "#F7D9C4", kwInk: "#C2541A",
   },
 };
+
+import { LOGOS } from "./logo.js";
 
 export const FONT_CSS_URL = "https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700;900&display=block";
 
@@ -66,19 +71,24 @@ body{font-family:"Noto Serif TC",serif;-webkit-font-smoothing:antialiased;text-r
 .list .it b{font-weight:900;color:${t.key}}
 .notes{margin-top:34px}
 .note{font-size:26px;line-height:1.7;color:${t.muted}}
-.flow{display:flex;align-items:center;gap:20px;margin:56px 0 46px}
+.flow{display:flex;align-items:center;gap:20px;margin:30px 0}.flow+.flow{margin-top:0}
 .flow .st{border:3px solid ${t.ink};padding:22px 26px;font-size:33px;font-weight:900;color:${t.key};background:transparent;white-space:nowrap}
 .flow .ar{font-size:40px;color:${t.ink}}
 .check .it{display:flex;border-bottom:2px solid ${t.line};padding:28px 0;font-size:34px;line-height:1.45}
-.check .it .n{flex:0 0 270px;font-weight:900;color:${t.key}}
+.check .it .n{flex:0 0 270px;font-weight:900;color:${t.accent === t.ink ? t.key : t.key}}
 .check .it .x{flex:1;color:${t.body}}
 .hl{position:absolute;left:112px;right:112px;bottom:190px;font-size:38px;font-weight:900;line-height:1.5;color:${t.hlInk}}
 .hl span{background:${t.hlBg};padding:2px 10px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
 .foot{position:absolute;left:112px;right:112px;bottom:66px;display:flex;justify-content:space-between;font-size:28px;color:${t.muted}}
 .cover .foot{color:${t.coverMuted}}
 /* cover */
-.brand{font-size:30px;letter-spacing:6px;font-weight:600;color:${t.coverInk}}
-.series{margin-top:16px;font-size:26px;color:${t.coverAccent}}
+.cover{padding-top:104px}
+${t.coverBar ? `.cover::before{content:"";position:absolute;left:0;top:0;bottom:0;width:26px;background:${t.coverBar}}` : ""}
+.logo{display:block;width:190px;height:auto}
+.series{margin-top:14px;font-size:27px;letter-spacing:1px;color:${t.coverAccent}}
+.kw span{background:linear-gradient(transparent 56%, ${t.kwBand} 56%, ${t.kwBand} 96%, transparent 96%);padding:0 6px}
+.pills{margin-top:30px;display:flex;flex-wrap:wrap;gap:14px}
+.pill{border:3px solid ${t.coverAccent};color:${t.coverAccent};border-radius:999px;padding:8px 24px;font-size:32px;font-weight:900;white-space:nowrap}
 .c-title{margin-top:96px;font-size:72px;line-height:1.38;font-weight:400;color:${t.coverInk}}
 .kw{margin-top:6px;font-size:300px;line-height:1.05;font-weight:900;color:${t.coverAccent};letter-spacing:-4px;white-space:nowrap}
 .c-sub{margin-top:34px;font-size:36px;line-height:1.6;color:${t.coverMuted}}
@@ -96,6 +106,7 @@ body{font-family:"Noto Serif TC",serif;-webkit-font-smoothing:antialiased;text-r
 .legal{position:absolute;left:112px;right:112px;bottom:150px;font-size:21px;line-height:1.7;color:${t.muted}}
 /* page scripts */
 .sc .para{font-size:31px;line-height:1.6;color:${t.body};margin-bottom:14px}
+.sc .rows{margin-top:6px}.sc .check{margin-top:6px;border-top:2px solid ${t.line}}
 .sc .sec{border-top:2px solid ${t.line};padding:20px 0 18px}
 .sc .sec:last-child{border-bottom:2px solid ${t.line}}
 .sc .sh{font-size:34px;font-weight:900;color:${t.key};line-height:1.4}
@@ -143,6 +154,7 @@ export function parseScript(text) {
     if (/^⚠/u.test(raw)) { cur = { type: "warn", head: stripEmoji(raw), lines: [] }; blocks.push(cur); continue; }
     if (/^✔/u.test(raw)) { cur = { type: "check", text: raw.replace(/^✔\uFE0F?\s*/u, ""), subs: [] }; blocks.push(cur); continue; }
     if (/^・/.test(raw)) { if (cur && (cur.type === "check" || cur.type === "warn" || cur.type === "sec")) (cur.subs ||= []).push(raw.slice(1).trim()); else blocks.push({ type: "para", text: raw }); continue; }
+    if (/\s→\s/.test(raw)) { cur = null; blocks.push({ type: "flow", steps: raw.split("→").map((x) => x.trim()).filter(Boolean) }); continue; }
     if (NUM.test(raw)) { cur = { type: "num", head: raw, lines: [] }; blocks.push(cur); continue; }
     if (EMOJI.test(raw)) { cur = { type: "sec", head: stripEmoji(raw), lines: [] }; blocks.push(cur); continue; }
     if (cur && cur.lines) { cur.lines.push(raw); continue; }
@@ -155,7 +167,7 @@ function splitTitle(t) {
   // Two balanced lines: break at the punctuation, space or 「 closest to the middle.
   t = noEmoji(t);
   const chars = [...t];
-  if (chars.length <= 9) return [t];
+  if (chars.length <= 6) return [t];
   let best = -1, bestD = 1e9;
   chars.forEach((c, i) => {
     let cut = -1;
@@ -177,17 +189,23 @@ function scriptBody(page, ctx) {
     const keyword = kwm ? kwm[1] : "";
     const head = kwm ? title.slice(0, kwm.index) : title;
     const paras = blocks.filter((b) => b.type === "para").map((b) => b.text);
-    const sub = paras.filter((l) => /\d/.test(l));
-    const teaser = paras.filter((l) => !/\d/.test(l));
+    const t = THEMES[ctx.theme] || THEMES.navy;
+    const pillLine = t.pills ? paras.find((l) => /・/.test(l) && !/\d/.test(l)) : null;
+    const rest = paras.filter((l) => l !== pillLine);
+    const sub = rest.filter((l) => /\d|・/.test(l));
+    const teaser = rest.filter((l) => !/\d|・/.test(l));
+    const muted = t.pills && teaser.length > 1 ? teaser.slice(0, -1) : [];
+    const strong = t.pills && teaser.length > 1 ? teaser.slice(-1) : teaser;
     return `<div class="page cover">
-      <div class="brand">AUSPACIFIC</div>
-      <div class="series">${rich(ctx.series || "")}</div>
+      <img class="logo" src="${(LOGOS[(THEMES[ctx.theme] || THEMES.navy).logoFile] || LOGOS.gold).src}" alt="AUSPACIFIC">
+      <div class="series">${esc(ctx.coverLabel || "")}</div>
       ${fitWrap(`
         <div class="c-title" style="margin-top:0">${splitTitle(head.replace(/[，、]$/, "")).map(rich).join("<br>")}</div>
-        ${keyword ? `<div class="kw">${esc(keyword)}</div>` : ""}
-        <div class="c-sub">${sub.map((l) => `<div>${rich(l)}</div>`).join("")}</div>
+        ${keyword ? `<div class="kw"><span>${esc(keyword)}</span></div>` : ""}
+        ${pillLine ? `<div class="pills">${pillLine.split("・").map((x) => `<span class="pill">${esc(x.trim())}</span>`).join("")}</div>` : ""}
+        <div class="c-sub">${[...sub, ...muted].map((l) => `<div>${rich(l)}</div>`).join("")}</div>
         <div class="rule"></div>
-        ${teaser.length ? `<div class="teaser">${teaser.map(rich).join("<br>")}</div>` : ""}`, 300, 170)}
+        ${strong.length ? `<div class="teaser">${strong.map(rich).join("<br>")}</div>` : ""}`, 400, 170)}
       ${foot}</div>`;
   }
   const label = `<div class="label">${esc(page.name || "")}</div>`;
@@ -196,23 +214,41 @@ function scriptBody(page, ctx) {
     const paras = blocks.filter((b) => b.type === "para").map((b) => b.text);
     const intro = paras.filter((l) => !/^(※|澳洲太平洋)/.test(l) && !/私訊/.test(l));
     const dm = paras.find((l) => /私訊/.test(l));
-    const svc = blocks.filter((b) => b.type === "sec").map((b) => b.head);
-    const contact = svc.filter((h) => /\d{3,}|號|路/.test(h));
-    const services = svc.filter((h) => !contact.includes(h));
+    const kw = dm && dm.match(/「(.+?)」/);
+    const extraLegal = paras.filter((l) => /^※/.test(l) && !(ctx.legal || []).some((x) => x.includes(l.replace(/^※\s*/, ""))));
+    const services = blocks.filter((b) => b.type === "sec").map((b) => b.head).filter((h) => !/\d{3,}|號|路/.test(h));
     return `<div class="page cta2">${label}${ttl}${fitWrap(`
       ${intro.map((l) => `<div class="intro">${md(l)}</div>`).join("")}
-      ${services.length ? `<div class="svc"><div class="bk">免費諮詢</div>${services.map((h) => `<div class="li">${md(h)}</div>`).join("")}</div>` : ""}
-      ${dm ? `<div class="dm2"><span>${md(stripEmoji(dm))}</span></div>` : ""}
-      ${contact.length ? `<div class="ct">${contact.map(md).join("<br>")}</div>` : ""}`, 490, 290)}
-      <div class="legal">${(ctx.legal || []).map(esc).join("<br>")}</div>${foot}</div>`;
+      ${services.length ? `<div class="box"><div class="bk">免費諮詢</div><div class="bt">${md(services[0])}</div>${services.length > 1 ? `<div class="bs">${services.slice(1).map(md).join("・")}</div>` : ""}</div>` : ""}
+      ${kw ? `<div class="dm"><span class="p">私訊</span><span class="w">${esc(kw[1])}</span></div><div class="reply">我們一對一回覆你</div>`
+        : dm ? `<div class="dm2"><span>${md(stripEmoji(dm))}</span></div>` : ""}`, 490, 290)}
+      <div class="legal">${[...(ctx.legal || []), ...extraLegal].map(esc).join("<br>")}</div>${foot}</div>`;
   }
-  const html = blocks.map((b) => {
+  const plain = (x) => [...noEmoji(x).replace(/\*\*/g, "")].length;
+  const isRow = (b) => b.type === "sec" && plain(b.head) <= 8 && b.lines.length >= 1 && b.lines.length <= 2 && !(b.subs || []).length;
+  const isNumRow = (b) => b.type === "num" && plain(b.head.replace(NUM, "")) <= 6 && b.lines.length === 1;
+  const grouped = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i], test = isRow(b) ? isRow : isNumRow(b) ? isNumRow : null;
+    let j = i; if (test) while (j + 1 < blocks.length && test(blocks[j + 1])) j++;
+    if (test && j > i) { grouped.push({ type: test === isRow ? "rows" : "numrows", items: blocks.slice(i, j + 1) }); i = j; } else grouped.push(b);
+  }
+  const html = grouped.map((b) => {
     switch (b.type) {
       case "para": return `<div class="para">${md(b.text)}</div>`;
+      case "rows": {
+        const kw = Math.min(330, Math.max(...b.items.map((x) => plain(x.head))) * 36 + 50);
+        return `<div class="rows">${b.items.map((x) => `<div class="row${x.lines.length > 1 ? "" : " compact"}"><div class="k" style="flex-basis:${kw}px">${md(x.head)}</div><div class="v"><div class="t">${md(x.lines[0])}</div>${x.lines[1] ? `<div class="s">${md(x.lines[1])}</div>` : ""}</div></div>`).join("")}</div>`;
+      }
+      case "numrows": return `<div class="check">${b.items.map((x) => `<div class="it"><span class="n" style="flex-basis:${Math.max(...b.items.map((y) => plain(y.head))) * 34 + 40}px">${md(x.head)}</span><span class="x">${md(x.lines[0])}</span></div>`).join("")}</div>`;
       case "sec": return `<div class="sec"><div class="sh">${md(b.head)}</div>${b.lines.length ? `<div class="sb">${b.lines.map(md).join("<br>")}</div>` : ""}${(b.subs || []).map((x) => `<div class="subi">・${md(x)}</div>`).join("")}</div>`;
       case "check": return `<div class="ck"><span class="m">✓</span><span>${md(b.text)}</span></div>${(b.subs || []).map((x) => `<div class="subi">・${md(x)}</div>`).join("")}`;
       case "num": return `<div class="num"><div class="nh">${md(b.head)}</div>${b.lines.length ? `<div class="nd">${b.lines.map(md).join("<br>")}</div>` : ""}</div>`;
       case "warn": return `<div class="warn">⚠ <b>${md(b.head)}</b>${b.lines.length ? "<br>" + b.lines.map(md).join("<br>") : ""}${(b.subs || []).map((x) => `<br>・${md(x)}`).join("")}</div>`;
+      case "flow": {
+        const rowsOf = []; for (let i = 0; i < b.steps.length; i += 3) rowsOf.push(b.steps.slice(i, i + 3));
+        return rowsOf.map((r) => `<div class="flow">${r.map((x, i) => `${i ? '<span class="ar">→</span>' : ""}<span class="st">${md(x)}</span>`).join("")}</div>`).join("");
+      }
       case "tipnote": return b.lines.length ? `<div class="tipnote">${b.lines.map(md).join("<br>")}</div>` : "";
       default: return "";
     }
@@ -230,14 +266,14 @@ function body(page, ctx) {
   switch (page.kind) {
     case "cover":
       return `<div class="page cover">
-        <div class="brand">AUSPACIFIC</div>
-        <div class="series">${rich(page.series || "")}</div>
+        <img class="logo" src="${(LOGOS[(THEMES[ctx.theme] || THEMES.navy).logoFile] || LOGOS.gold).src}" alt="AUSPACIFIC">
+        <div class="series">${esc(ctx.coverLabel || "")}</div>
         ${fitWrap(`
           <div class="c-title" style="margin-top:0">${(page.title || []).map(rich).join("<br>")}</div>
-          ${page.keyword ? `<div class="kw">${esc(page.keyword)}</div>` : ""}
+          ${page.keyword ? `<div class="kw"><span>${esc(page.keyword)}</span></div>` : ""}
           <div class="c-sub">${lines(page.sub, "l")}</div>
           <div class="rule"></div>
-          ${page.teaser ? `<div class="teaser">${rich(page.teaser)}</div>` : ""}`, 300, 170)}
+          ${page.teaser ? `<div class="teaser">${rich(page.teaser)}</div>` : ""}`, 400, 170)}
         ${foot}</div>`;
     case "table":
       return `<div class="page">${head}${fitWrap(`
@@ -276,7 +312,7 @@ const FIT_SCRIPT = `
 const res={overflow:[]};
 document.querySelectorAll('.page:not(.cover) .title').forEach(t=>{let fs=84;const lh=()=>parseFloat(getComputedStyle(t).lineHeight);
 while(t.offsetHeight>lh()*2+4&&fs>54){fs-=3;t.style.fontSize=fs+'px';}
-const f=t.parentElement.querySelector('.fit');if(f){const top=t.offsetTop+t.offsetHeight+44;if(top>parseFloat(getComputedStyle(f).top))f.style.top=top+'px';}});
+const f=t.parentElement.querySelector('.fit');if(f){const top=t.offsetTop+t.offsetHeight+44;f.style.top=top+'px';}});
 document.querySelectorAll('.fit').forEach((f,i)=>{const inner=f.firstElementChild;let s=1;
 inner.style.width=f.clientWidth+'px';
 while(inner.scrollHeight*s>f.clientHeight+1&&s>0.72){s-=0.02;inner.style.transform='scale('+s+')';inner.style.width=(f.clientWidth/s)+'px';}
@@ -301,7 +337,8 @@ export function postPages(post, brand, templatesCfg) {
     [brand?.account?.disclaimer, brand?.legal?.fx_note].filter(Boolean).join("　"),
   ];
   const handle = brand?.platforms?.instagram?.handle || "@auspacific_taiwan";
-  return pages.map((p, i) => pageHTML(p, { theme, handle, pageNo: i + 1, total: pages.length, legal, series: post.series || "" }));
+  const coverLabel = templatesCfg?.themes?.[theme]?.cover_label || THEMES[theme].coverLabel;
+  return pages.map((p, i) => pageHTML(p, { theme, handle, pageNo: i + 1, total: pages.length, legal, series: post.series || "", coverLabel }));
 }
 
 export function themeFor(post, templatesCfg) {
