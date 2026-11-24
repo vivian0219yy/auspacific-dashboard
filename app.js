@@ -213,7 +213,11 @@ function lint(post, stage) {
     else { const hh = +splitLocal(post.publish_at)[1].slice(0, 2); if (hh < 8 || hh > 23) issues.push(["bad", "發布時間請在 08:00–23:30 之間（台北時間）"]); }
     if (post.format === "story") issues.push(["bad", "限動要在 IG App 手動發（投票／問答貼紙無法用 API 發布）"]);
   }
-  for (const c of post.checks || []) issues.push([c.level || "warn", `系統檢查：${c.message}`]);
+  const all = (dt + " " + Object.values(post.captions || {}).join(" ") + " " + (post.reel_script ? reelText(post.reel_script) : "")).replace(/\s+/g, "");
+  (post.checks || []).forEach((c, i) => {
+    const fixed = c.match && !all.includes(String(c.match).replace(/\s+/g, ""));
+    issues.push(fixed ? ["done", `✓ 已修改：${c.message}`, i] : [c.level || "warn", `系統檢查：${c.message}`, i]);
+  });
   return issues;
 }
 // Every number in a Reel script must also appear in that week's other posts.
@@ -425,7 +429,7 @@ function renderDetail(selectedMedia = 0) {
       ${uploadPanel}
       <div class="panel">
         <h3>檢查</h3>
-        ${issues.length ? `<ul class="checks">${issues.map(([lvl, msg]) => `<li class="${lvl}">${esc(msg)}</li>`).join("")}</ul>` : `<p class="muted" style="margin:0">沒有發現問題</p>`}
+        ${issues.length ? `<ul class="checks">${issues.map(([lvl, msg, ci]) => `<li class="${lvl}">${esc(msg)}${ci !== undefined && editable ? ` <button type="button" class="ghost resolve" data-resolve="${ci}">標記已處理</button>` : ""}</li>`).join("")}</ul>` : `<p class="muted" style="margin:0">沒有發現問題</p>`}
       </div>
       ${(p.sources || []).length ? `<div class="panel"><h3>資料來源</h3><ul class="checks">${p.sources.map((s) =>
         `<li>${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a>` : esc(s.name)} ${esc(s.date || "")}${s.note ? ` — ${esc(s.note)}` : ""}</li>`).join("")}</ul></div>` : ""}
@@ -497,6 +501,11 @@ function renderDetail(selectedMedia = 0) {
     for (const el of document.querySelectorAll("[data-dt]")) el.addEventListener("input", () => { clearTimeout(drawPreview.t); drawPreview.t = setTimeout(() => { collectForm(); drawPreview(); }, 400); });
   }
   for (const b of document.querySelectorAll("[data-act]")) b.onclick = () => act(b.dataset.act);
+  for (const b of document.querySelectorAll("[data-resolve]")) b.onclick = () => {
+    const c = (p.checks || [])[+b.dataset.resolve]; if (!c) return;
+    if (!confirm(`把這條檢查標記為已處理？\n\n${c.message}\n\n（按「儲存修改」或核准時一起存，紀錄會留下）`)) return;
+    collectForm(); p.checks.splice(+b.dataset.resolve, 1); stamp(p, "check resolved by reviewer", c.message); renderDetail();
+  };
   $("#uploadBtn")?.addEventListener("click", uploadVideo);
   $("#addPage")?.addEventListener("click", () => { collectForm(); const pg = p.design_text; pg.splice(Math.max(pg.length - 1, 1), 0, { name: "新頁", text: "標題\n\n💡 重點" }); renderDetail(); });
   for (const b of document.querySelectorAll("[data-delpage]")) b.onclick = () => { if (!confirm("刪除這一頁？")) return; collectForm(); p.design_text.splice(+b.dataset.delpage, 1); renderDetail(); };
