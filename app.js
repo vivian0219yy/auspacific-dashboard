@@ -309,13 +309,26 @@ function scriptText(p) {
 function scriptPanel(p, editable) {
   const dis = editable ? "" : "disabled";
   const body = p.design_text.map((pg, i) => `<fieldset class="dt-page"><legend>P${i + 1}｜<input class="pname" data-dt="${i}.name" value="${esc(pg.name || "")}" ${dis}></legend>
-      <textarea data-dt="${i}.text" class="script" rows="${Math.min(18, Math.max(6, String(pg.text || "").split("\n").length + 1))}" ${dis}>${esc(pg.text || "")}</textarea>
+      <textarea data-dt="${i}.text" class="script" rows="${Math.max(4, String(pg.text || "").split("\n").length + 1)}" ${dis}>${esc(pg.text || "")}</textarea>
       ${editable ? `<div style="text-align:right"><button type="button" class="ghost danger" data-delpage="${i}">刪除這一頁</button></div>` : ""}</fieldset>`).join("");
   const help = `<p class="muted" style="margin-top:0">每頁第一行是標題。emoji 開頭＝段落標題；✔ 條列；・ 子項目；①② 步驟；💡／👉 底部重點；⚠️ 提醒；**粗體**；封面用「」標出大字。</p>`;
   return editable
     ? `<div class="panel"><h3>貼文內容（逐頁）</h3>${help}${body}<div class="row" style="flex-wrap:wrap"><button type="button" id="addPage">＋ 新增頁</button><button type="button" id="copyAll" class="ghost">複製全文</button></div></div>`
     : `<details class="panel"><summary><h3>貼文內容（已核准）</h3></summary>${body}<button type="button" id="copyAll" class="ghost">複製全文</button></details>`;
 }
+
+const THEME_OPTS = [["", "自動（依主題）"], ["navy", "深藍＋香檳金"], ["blue", "藍＋淺灰白"], ["charcoal", "炭黑＋陶土橘"]];
+function themePanel(p, stage) {
+  if (p.production !== "auto" || !Array.isArray(p.design_text) || !p.design_text.length) return "";
+  if (stage !== "content" && stage !== "final") return "";
+  const cur = ["navy", "blue", "charcoal"].includes(p.template) ? p.template : "";
+  const auto = (siteCfg.templates?.pillar_theme || {})[p.pillar] || "navy";
+  const autoName = THEME_OPTS.find(([k]) => k === auto)?.[1] || auto;
+  return `<div class="panel"><h3>配色</h3><select id="fTheme">${THEME_OPTS.map(([k, v]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(k ? v : `${v}：${autoName}`)}</option>`).join("")}</select>
+    <small class="muted">${stage === "content" ? "換了預覽會馬上更新，按「儲存修改」或核准時一起存。" : "換配色會重新產生圖片（約 2–3 分鐘），完成後回到成品審核。"}</small></div>`;
+}
+
+function autosize(el) { if (!el.offsetParent) return; el.style.height = "auto"; el.style.height = el.scrollHeight + 2 + "px"; }
 
 function designTextPanel(p, editable) {
   if (!Array.isArray(p.design_text) || !p.design_text.length) return "";
@@ -427,6 +440,7 @@ function renderDetail(selectedMedia = 0) {
         ${p.review_notes ? `<p class="muted">備註：${esc(p.review_notes)}</p>` : ""}
       </div>
 
+      ${themePanel(p, stage)}
       ${designTextPanel(p, textEditable)}
       ${reelPanel(p, textEditable)}
 
@@ -486,6 +500,18 @@ function renderDetail(selectedMedia = 0) {
   $("#uploadBtn")?.addEventListener("click", uploadVideo);
   $("#addPage")?.addEventListener("click", () => { collectForm(); const pg = p.design_text; pg.splice(Math.max(pg.length - 1, 1), 0, { name: "新頁", text: "標題\n\n💡 重點" }); renderDetail(); });
   for (const b of document.querySelectorAll("[data-delpage]")) b.onclick = () => { if (!confirm("刪除這一頁？")) return; collectForm(); p.design_text.splice(+b.dataset.delpage, 1); renderDetail(); };
+  for (const ta of document.querySelectorAll("textarea.script, #fCaption")) { autosize(ta); ta.addEventListener("input", () => autosize(ta)); }
+  for (const d of document.querySelectorAll("details.panel")) d.addEventListener("toggle", () => d.querySelectorAll("textarea").forEach(autosize));
+  $("#fTheme")?.addEventListener("change", async (e) => {
+    const v = e.target.value;
+    if (stage === "content") { if (v) p.template = v; else delete p.template; collectForm(); drawPreview(); return; }
+    if (!confirm("換配色後會重新產生圖片，約 2–3 分鐘後回到成品審核。確定？")) { e.target.value = ["navy", "blue", "charcoal"].includes(p.template) ? p.template : ""; return; }
+    collectForm();
+    if (v) p.template = v; else delete p.template;
+    p.status = "content_approved"; delete p.approval; stamp(p, "theme changed", v || "auto");
+    try { await savePost(current, `Change theme ${current.id} → ${v || "auto"}`); toast("已送出重新製作圖片"); syncList(); renderDetail(); }
+    catch (err) { toast(err.message, true); }
+  });
   $("#copyAll")?.addEventListener("click", async () => { collectForm(); try { await navigator.clipboard.writeText(scriptText(p)); toast("已複製全文"); } catch { toast("無法複製，請手動選取", true); } });
 }
 
@@ -593,7 +619,7 @@ async function act(kind) {
       const warnings = issues.filter(([lvl]) => lvl === "warn");
       const warnHtml = warnings.length ? `<ul class="checks">${warnings.map(([, m]) => `<li class="warn">${esc(m)}</li>`).join("")}</ul>` : "";
       if (kind === "approveContent") {
-        const ok = await confirmDialog("核准內容", `<p>核准後系統會依這份文字${p.format === "reel" ? "標記為「等待拍攝」" : "在下一個平日 10:13 用 Canva 製作圖片"}。之後還會有一次成品審核。</p>${warnHtml}`);
+        const ok = await confirmDialog("核准內容", `<p>核准後系統會依這份文字${p.format === "reel" ? "標記為「等待拍攝」" : "自動產生圖片（約 2–3 分鐘）"}。之後還會有一次成品審核。</p>${warnHtml}`);
         if (!ok) return;
         p.status = "content_approved";
         stamp(p, "content approved");
