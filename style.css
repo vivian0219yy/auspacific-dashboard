@@ -108,3 +108,5 @@ details.panel[open] > summary::after { content: " ▴"; }
 .pv { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .pvf { position: relative; width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 6px; background: #ddd; }
 .pvf iframe { position: absolute; top: 0; left: 0; width: 1080px; height: 1440px; border: 0; transform-origin: top left; pointer-events: none; }
+textarea.script { min-height: 0; font-size: 15px; line-height: 1.6; }
+legend input.pname { display: inline-block; width: auto; min-width: 160px; padding: 2px 6px; font-size: 13px; }

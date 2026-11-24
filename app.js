@@ -302,8 +302,24 @@ async function openPost(id) {
 
 const stageOf = (s) => (s === "content_review" ? "content" : ["design_review", "failed", "changed_after_approval", "missed"].includes(s) ? "final" : "other");
 
+function scriptText(p) {
+  return (p.design_text || []).map((pg, i) => `P${i + 1}｜${pg.name || ""}\n\n${pg.text || ""}`).join("\n\n");
+}
+
+function scriptPanel(p, editable) {
+  const dis = editable ? "" : "disabled";
+  const body = p.design_text.map((pg, i) => `<fieldset class="dt-page"><legend>P${i + 1}｜<input class="pname" data-dt="${i}.name" value="${esc(pg.name || "")}" ${dis}></legend>
+      <textarea data-dt="${i}.text" class="script" rows="${Math.min(18, Math.max(6, String(pg.text || "").split("\n").length + 1))}" ${dis}>${esc(pg.text || "")}</textarea>
+      ${editable ? `<div style="text-align:right"><button type="button" class="ghost danger" data-delpage="${i}">刪除這一頁</button></div>` : ""}</fieldset>`).join("");
+  const help = `<p class="muted" style="margin-top:0">每頁第一行是標題。emoji 開頭＝段落標題；✔ 條列；・ 子項目；①② 步驟；💡／👉 底部重點；⚠️ 提醒；**粗體**；封面用「」標出大字。</p>`;
+  return editable
+    ? `<div class="panel"><h3>貼文內容（逐頁）</h3>${help}${body}<div class="row" style="flex-wrap:wrap"><button type="button" id="addPage">＋ 新增頁</button><button type="button" id="copyAll" class="ghost">複製全文</button></div></div>`
+    : `<details class="panel"><summary><h3>貼文內容（已核准）</h3></summary>${body}<button type="button" id="copyAll" class="ghost">複製全文</button></details>`;
+}
+
 function designTextPanel(p, editable) {
   if (!Array.isArray(p.design_text) || !p.design_text.length) return "";
+  if (p.design_text.some((pg) => typeof pg.text === "string")) return scriptPanel(p, editable);
   const dis = editable ? "" : "disabled";
   const input = (path, val) => `<input data-dt="${path}" value="${esc(val)}" ${dis}><small class="muted">${[...String(val || "")].length} 字</small>`;
   const area = (path, val) => `<textarea data-dt="${path}" rows="3" style="min-height:0" ${dis}>${esc(val)}</textarea><small class="muted">${[...String(val || "")].length} 字</small>`;
@@ -468,6 +484,9 @@ function renderDetail(selectedMedia = 0) {
   }
   for (const b of document.querySelectorAll("[data-act]")) b.onclick = () => act(b.dataset.act);
   $("#uploadBtn")?.addEventListener("click", uploadVideo);
+  $("#addPage")?.addEventListener("click", () => { collectForm(); const pg = p.design_text; pg.splice(Math.max(pg.length - 1, 1), 0, { name: "新頁", text: "標題\n\n💡 重點" }); renderDetail(); });
+  for (const b of document.querySelectorAll("[data-delpage]")) b.onclick = () => { if (!confirm("刪除這一頁？")) return; collectForm(); p.design_text.splice(+b.dataset.delpage, 1); renderDetail(); };
+  $("#copyAll")?.addEventListener("click", async () => { collectForm(); try { await navigator.clipboard.writeText(scriptText(p)); toast("已複製全文"); } catch { toast("無法複製，請手動選取", true); } });
 }
 
 function drawPreview() {

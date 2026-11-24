@@ -94,6 +94,28 @@ body{font-family:"Noto Serif TC",serif;-webkit-font-smoothing:antialiased;text-r
 .dm .w{font-size:96px;font-weight:900;color:${t.kwInk};background:${t.kwBg};padding:0 22px;line-height:1.25}
 .reply{margin-top:14px;font-size:34px;color:${t.body}}
 .legal{position:absolute;left:112px;right:112px;bottom:150px;font-size:21px;line-height:1.7;color:${t.muted}}
+/* page scripts */
+.sc .para{font-size:31px;line-height:1.6;color:${t.body};margin-bottom:14px}
+.sc .sec{border-top:2px solid ${t.line};padding:20px 0 18px}
+.sc .sec:last-child{border-bottom:2px solid ${t.line}}
+.sc .sh{font-size:34px;font-weight:900;color:${t.key};line-height:1.4}
+.sc .sb{margin-top:6px;font-size:29px;line-height:1.58;color:${t.body}}
+.sc .ck{display:flex;gap:16px;font-size:30px;line-height:1.55;color:${t.body};padding:8px 0}
+.sc .ck .m{color:${t.accent};font-weight:900;flex:0 0 auto}
+.sc .subi{font-size:28px;line-height:1.55;color:${t.body};padding:3px 0 3px 52px}
+.sc .num{border-top:2px solid ${t.line};padding:16px 0}
+.sc .num:last-child{border-bottom:2px solid ${t.line}}
+.sc .num .nh{font-size:32px;font-weight:900;color:${t.key}}
+.sc .num .nd{margin-top:4px;font-size:28px;line-height:1.55;color:${t.body}}
+.sc .warn{margin-top:18px;font-size:28px;line-height:1.6;color:${t.muted}}
+.sc .warn b{color:${t.ink}}
+.sc .tipnote{margin-top:14px;font-size:26px;line-height:1.6;color:${t.muted}}
+.cta2 .svc{margin-top:40px;background:${t.boxBg};color:${t.boxInk};padding:34px 48px}
+.cta2 .svc .bk{font-size:28px;color:${t.boxMuted};font-weight:600}
+.cta2 .svc .li{margin-top:12px;font-size:34px;font-weight:700}
+.cta2 .dm2{margin-top:40px;font-size:36px;font-weight:900;color:${t.kwInk}}
+.cta2 .dm2 span{background:${t.kwBg};padding:2px 12px}
+.cta2 .ct{margin-top:26px;font-size:28px;line-height:1.7;color:${t.body}}
 `;
 }
 
@@ -101,7 +123,106 @@ function fitWrap(inner, top, bottom) {
   return `<div class="fit" style="--top:${top}px;--bottom:${bottom}px"><div class="fit-inner">${inner}</div></div>`;
 }
 
+// ---------- page scripts (the approved P1…P9 text format) ----------
+const EMOJI = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator})[\uFE0F\u200D\p{Extended_Pictographic}]*\s*/u;
+const NUM = /^[①②③④⑤⑥⑦⑧⑨⑩]\s*/;
+const stripEmoji = (l) => l.replace(EMOJI, "").trim();
+const noEmoji = (s) => String(s ?? "").replace(/(?:\p{Extended_Pictographic}|\p{Regional_Indicator})[\uFE0F\u200D]*/gu, "").replace(/\s{2,}/g, " ").trim();
+const md = (s) => rich(noEmoji(s)).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+
+export function parseScript(text) {
+  const lines = String(text || "").split("\n").map((l) => l.trim());
+  const nonEmpty = lines.filter(Boolean);
+  const title = nonEmpty[0] || "";
+  const blocks = []; let tip = null, tipNote = [];
+  let cur = null; let seenTitle = false;
+  for (const raw of lines) {
+    if (!raw) { cur = null; continue; }
+    if (!seenTitle) { seenTitle = true; continue; }
+    if (/^(💡|👉)/u.test(raw)) { tip = stripEmoji(raw).replace(/\*\*/g, ""); cur = { type: "tipnote", lines: [] }; blocks.push(cur); continue; }
+    if (/^⚠/u.test(raw)) { cur = { type: "warn", head: stripEmoji(raw), lines: [] }; blocks.push(cur); continue; }
+    if (/^✔/u.test(raw)) { cur = { type: "check", text: raw.replace(/^✔\uFE0F?\s*/u, ""), subs: [] }; blocks.push(cur); continue; }
+    if (/^・/.test(raw)) { if (cur && (cur.type === "check" || cur.type === "warn" || cur.type === "sec")) (cur.subs ||= []).push(raw.slice(1).trim()); else blocks.push({ type: "para", text: raw }); continue; }
+    if (NUM.test(raw)) { cur = { type: "num", head: raw, lines: [] }; blocks.push(cur); continue; }
+    if (EMOJI.test(raw)) { cur = { type: "sec", head: stripEmoji(raw), lines: [] }; blocks.push(cur); continue; }
+    if (cur && cur.lines) { cur.lines.push(raw); continue; }
+    blocks.push({ type: "para", text: raw });
+  }
+  return { title, blocks, tip };
+}
+
+function splitTitle(t) {
+  // Two balanced lines: break at the punctuation, space or 「 closest to the middle.
+  t = noEmoji(t);
+  const chars = [...t];
+  if (chars.length <= 9) return [t];
+  let best = -1, bestD = 1e9;
+  chars.forEach((c, i) => {
+    let cut = -1;
+    if ("，、：；？?".includes(c)) cut = i + 1;
+    else if (c === " " || c === "「") cut = i;
+    if (cut > 1 && cut < chars.length - 1) { const d = Math.abs(cut - chars.length / 2); if (d < bestD) { bestD = d; best = cut; } }
+  });
+  if (best < 0) return [t];
+  return [chars.slice(0, best).join("").replace(/[，、\s]+$/, ""), chars.slice(best).join("").trim()];
+}
+
+function scriptBody(page, ctx) {
+  const foot = `<div class="foot"><span>${esc(ctx.handle)}</span><span>${pad2(ctx.pageNo)}</span></div>`;
+  const isCover = ctx.pageNo === 1;
+  const isCta = ctx.pageNo === ctx.total && ctx.total > 1;
+  const { title, blocks, tip } = parseScript(page.text);
+  if (isCover) {
+    const kwm = title.match(/「(.+?)」/);
+    const keyword = kwm ? kwm[1] : "";
+    const head = kwm ? title.slice(0, kwm.index) : title;
+    const paras = blocks.filter((b) => b.type === "para").map((b) => b.text);
+    const sub = paras.filter((l) => /\d/.test(l));
+    const teaser = paras.filter((l) => !/\d/.test(l));
+    return `<div class="page cover">
+      <div class="brand">AUSPACIFIC</div>
+      <div class="series">${rich(ctx.series || "")}</div>
+      ${fitWrap(`
+        <div class="c-title" style="margin-top:0">${splitTitle(head.replace(/[，、]$/, "")).map(rich).join("<br>")}</div>
+        ${keyword ? `<div class="kw">${esc(keyword)}</div>` : ""}
+        <div class="c-sub">${sub.map((l) => `<div>${rich(l)}</div>`).join("")}</div>
+        <div class="rule"></div>
+        ${teaser.length ? `<div class="teaser">${teaser.map(rich).join("<br>")}</div>` : ""}`, 300, 170)}
+      ${foot}</div>`;
+  }
+  const label = `<div class="label">${esc(page.name || "")}</div>`;
+  const ttl = `<div class="title">${splitTitle(title).map(md).join("<br>")}</div>`;
+  if (isCta) {
+    const paras = blocks.filter((b) => b.type === "para").map((b) => b.text);
+    const intro = paras.filter((l) => !/^(※|澳洲太平洋)/.test(l) && !/私訊/.test(l));
+    const dm = paras.find((l) => /私訊/.test(l));
+    const svc = blocks.filter((b) => b.type === "sec").map((b) => b.head);
+    const contact = svc.filter((h) => /\d{3,}|號|路/.test(h));
+    const services = svc.filter((h) => !contact.includes(h));
+    return `<div class="page cta2">${label}${ttl}${fitWrap(`
+      ${intro.map((l) => `<div class="intro">${md(l)}</div>`).join("")}
+      ${services.length ? `<div class="svc"><div class="bk">免費諮詢</div>${services.map((h) => `<div class="li">${md(h)}</div>`).join("")}</div>` : ""}
+      ${dm ? `<div class="dm2"><span>${md(stripEmoji(dm))}</span></div>` : ""}
+      ${contact.length ? `<div class="ct">${contact.map(md).join("<br>")}</div>` : ""}`, 490, 290)}
+      <div class="legal">${(ctx.legal || []).map(esc).join("<br>")}</div>${foot}</div>`;
+  }
+  const html = blocks.map((b) => {
+    switch (b.type) {
+      case "para": return `<div class="para">${md(b.text)}</div>`;
+      case "sec": return `<div class="sec"><div class="sh">${md(b.head)}</div>${b.lines.length ? `<div class="sb">${b.lines.map(md).join("<br>")}</div>` : ""}${(b.subs || []).map((x) => `<div class="subi">・${md(x)}</div>`).join("")}</div>`;
+      case "check": return `<div class="ck"><span class="m">✓</span><span>${md(b.text)}</span></div>${(b.subs || []).map((x) => `<div class="subi">・${md(x)}</div>`).join("")}`;
+      case "num": return `<div class="num"><div class="nh">${md(b.head)}</div>${b.lines.length ? `<div class="nd">${b.lines.map(md).join("<br>")}</div>` : ""}</div>`;
+      case "warn": return `<div class="warn">⚠ <b>${md(b.head)}</b>${b.lines.length ? "<br>" + b.lines.map(md).join("<br>") : ""}${(b.subs || []).map((x) => `<br>・${md(x)}`).join("")}</div>`;
+      case "tipnote": return b.lines.length ? `<div class="tipnote">${b.lines.map(md).join("<br>")}</div>` : "";
+      default: return "";
+    }
+  }).join("");
+  const hl = tip ? `<div class="hl"><span>${md(tip)}</span></div>` : "";
+  return `<div class="page sc">${label}${ttl}${fitWrap(html, 490, tip ? 300 : 200)}${hl}${foot}</div>`;
+}
+
 function body(page, ctx) {
+  if (typeof page.text === "string") return scriptBody(page, ctx);
   const foot = `<div class="foot"><span>${esc(ctx.handle)}</span><span>${pad2(ctx.pageNo)}</span></div>`;
   const hl = page.highlight ? `<div class="hl"><span>${rich(page.highlight)}</span></div>` : "";
   const head = `<div class="label">${rich(page.label || "")}</div><div class="title">${(page.title || []).map(rich).join("<br>")}</div>`;
@@ -153,6 +274,9 @@ function body(page, ctx) {
 const FIT_SCRIPT = `
 (async()=>{try{await document.fonts.ready}catch(e){}
 const res={overflow:[]};
+document.querySelectorAll('.page:not(.cover) .title').forEach(t=>{let fs=84;const lh=()=>parseFloat(getComputedStyle(t).lineHeight);
+while(t.offsetHeight>lh()*2+4&&fs>54){fs-=3;t.style.fontSize=fs+'px';}
+const f=t.parentElement.querySelector('.fit');if(f){const top=t.offsetTop+t.offsetHeight+44;if(top>parseFloat(getComputedStyle(f).top))f.style.top=top+'px';}});
 document.querySelectorAll('.fit').forEach((f,i)=>{const inner=f.firstElementChild;let s=1;
 inner.style.width=f.clientWidth+'px';
 while(inner.scrollHeight*s>f.clientHeight+1&&s>0.72){s-=0.02;inner.style.transform='scale('+s+')';inner.style.width=(f.clientWidth/s)+'px';}
@@ -177,7 +301,7 @@ export function postPages(post, brand, templatesCfg) {
     [brand?.account?.disclaimer, brand?.legal?.fx_note].filter(Boolean).join("　"),
   ];
   const handle = brand?.platforms?.instagram?.handle || "@auspacific_taiwan";
-  return pages.map((p, i) => pageHTML(p, { theme, handle, pageNo: i + 1, total: pages.length, legal }));
+  return pages.map((p, i) => pageHTML(p, { theme, handle, pageNo: i + 1, total: pages.length, legal, series: post.series || "" }));
 }
 
 export function themeFor(post, templatesCfg) {
