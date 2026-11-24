@@ -10,27 +10,27 @@ export const W = 1080, H = 1440;
 export const THEMES = {
   navy: {
     name: "深藍＋香檳金",
-    coverBg: "#1D2A4A", coverInk: "#FFFFFF", coverAccent: "#D4C27A", coverMuted: "#C9CFDC",
+    coverBg: "#1D2A4A", coverInk: "#FFFFFF", coverAccent: "#D8C87A", coverMuted: "#C9CFDC",
     logoFile: "gold", coverLabel: "澳洲置產筆記", coverBar: "", kwBand: "transparent", pills: false,
-    bg: "#F8F7F3", ink: "#1D2A4A", body: "#2E3445", muted: "#6B6E78", key: "#1D2A4A",
+    bg: "#F8F7F4", ink: "#1D2A4A", body: "#2E3445", muted: "#6B6E78", key: "#1D2A4A",
     accent: "#1D2A4A", hlBg: "#E6D795", hlInk: "#1D2A4A", line: "#BDBBB4",
-    boxBg: "#1D2A4A", boxInk: "#FFFFFF", boxMuted: "#D4C27A", kwBg: "#E6D795", kwInk: "#1D2A4A",
+    boxBg: "#1D2A4A", boxInk: "#FFFFFF", boxMuted: "#D8C87A", kwBg: "#E6D795", kwInk: "#1D2A4A",
   },
   blue: {
     name: "藍＋淺灰白",
-    coverBg: "#F4F6FA", coverInk: "#1E2A44", coverAccent: "#1A57A0", coverMuted: "#66708A",
-    logoFile: "blue", coverLabel: "墨爾本留學筆記", coverBar: "#1A57A0", kwBand: "#CFDFF2", pills: true,
-    bg: "#F4F6FA", ink: "#1E2A44", body: "#2E3A52", muted: "#66708A", key: "#1A57A0",
-    accent: "#1A57A0", hlBg: "#D3E2F4", hlInk: "#1A57A0", line: "#BCC3D1",
-    boxBg: "#1A57A0", boxInk: "#FFFFFF", boxMuted: "#D6E3F3", kwBg: "#D3E2F4", kwInk: "#1A57A0",
+    coverBg: "#F4F6F9", coverInk: "#1E2A44", coverAccent: "#1A56A0", coverMuted: "#66708A",
+    logoFile: "blue", coverLabel: "墨爾本留學筆記", coverBar: "#1A56A0", kwBand: "#CFDFF2", pills: true,
+    bg: "#F4F6F9", ink: "#1E293B", body: "#1E293B", muted: "#66708A", key: "#1A56A0",
+    accent: "#1A56A0", hlBg: "#D3E2F4", hlInk: "#1A56A0", line: "#BCC3D1",
+    boxBg: "#1A56A0", boxInk: "#FFFFFF", boxMuted: "#D6E3F3", kwBg: "#D3E2F4", kwInk: "#1A56A0",
   },
   charcoal: {
     name: "炭黑＋陶土橘",
-    coverBg: "#1A1D27", coverInk: "#FFFFFF", coverAccent: "#D96B2A", coverMuted: "#C9CBD1",
+    coverBg: "#141821", coverInk: "#FFFFFF", coverAccent: "#D96B27", coverMuted: "#C9CBD1",
     logoFile: "white", coverLabel: "澳洲置產筆記", coverBar: "", kwBand: "transparent", pills: false,
     bg: "#FFFFFF", ink: "#1E2742", body: "#2E3445", muted: "#6B6E78", key: "#1E2742",
-    accent: "#D96B2A", hlBg: "#F7D9C4", hlInk: "#C2541A", line: "#C8C7CC",
-    boxBg: "#D96B2A", boxInk: "#FFFFFF", boxMuted: "#FBE3D3", kwBg: "#F7D9C4", kwInk: "#C2541A",
+    accent: "#D96B27", hlBg: "#F7D9C4", hlInk: "#C2541A", line: "#C8C7CC",
+    boxBg: "#D96B27", boxInk: "#FFFFFF", boxMuted: "#FBE3D3", kwBg: "#F7D9C4", kwInk: "#C2541A",
   },
 };
 

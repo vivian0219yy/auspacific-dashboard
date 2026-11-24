@@ -40,7 +40,7 @@ const FIELD_LABELS = {
   kicker: "框內小標", reply: "回覆文字", highlight: "重點標示（底部）",
 };
 // Mirrors brand.json "never" rules.
-const BANNED = ["保證", "穩賺", "必漲", "高報酬", "翻倍", "保本", "零風險", "搶手", "最後機會", "錯過不再", "LINE ID", "line.me"];
+const BANNED = ["保證", "穩賺", "必漲", "高報酬", "翻倍", "保本", "零風險", "搶手", "最後機會", "錯過不再", "LINE ID", "line.me", "保證增值", "財富引擎", "躺著賺", "全球獨家", "Podcast", "公立學校免費"];
 const MAX_UPLOAD = 95 * 1024 * 1024; // GitHub contents API limit is 100 MB
 
 // ---------- state ----------
