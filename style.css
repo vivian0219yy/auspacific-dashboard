@@ -113,3 +113,9 @@ legend input.pname { display: inline-block; width: auto; min-width: 160px; paddi
 #fTheme { margin-bottom: 4px; }
 .checks li.done { color: var(--muted); }
 .checks button.resolve { padding: 1px 8px; font-size: 12px; margin-left: 4px; }
+.np-media { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 10px; }
+.np-item { border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: #fff; }
+.np-item img, .np-item video { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; background: #111; display: block; }
+.np-ctl { display: flex; gap: 4px; align-items: center; margin-top: 4px; font-size: 13px; }
+.np-ctl button { padding: 2px 8px; }
+.np-item small.bad { color: var(--bad); }

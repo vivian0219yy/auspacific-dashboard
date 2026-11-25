@@ -148,6 +148,106 @@ function randomSlot() {
   return `${String(10 + Math.floor(n / 2)).padStart(2, "0")}:${n % 2 ? "30" : "00"}`;
 }
 
+
+// ---------- new post from finished files ----------
+let draft = null; // { files: [File], urls: [objectURL], ratios: [] }
+function openNewPost() {
+  draft = { files: [], urls: [], ratios: [] };
+  current = null;
+  $("#listView").hidden = true; $("#detailView").hidden = false;
+  const today = splitLocal(new Date().toISOString())[0];
+  $("#detail").innerHTML = `
+  <div class="detail-grid">
+    <div>
+      <div class="panel"><h3>圖片或影片</h3>
+        <p class="muted" style="margin-top:0">單張圖或輪播：1–10 張 JPG／PNG（建議 1080×1440 或 1080×1350）。Reel：1 支 MP4／MOV，95 MB 以內。</p>
+        <input type="file" id="npFiles" multiple accept="image/jpeg,image/png,video/mp4,video/quicktime">
+        <div id="npMedia" class="np-media"></div>
+      </div>
+    </div>
+    <div>
+      <div class="panel"><h3>新增貼文（已完成的圖片／影片）</h3>
+        <label>標題（只顯示在列表）<input id="npTitle" placeholder="例：留學住宿比一比"></label>
+        <div class="row">
+          <label>日期<input type="date" id="npDate" min="${today}" value="${today}"></label>
+          <label>時間<input type="time" id="npTime" step="1800" min="10:00" max="23:30" value="${randomSlot()}"></label>
+          <button type="button" id="npRand" class="ghost" style="flex:0 0 auto;align-self:end;margin-bottom:10px">🎲 隨機時間</button>
+        </div>
+        <div class="row">${["instagram", "facebook"].map((k) => `<label style="flex:0 0 auto;font-weight:400"><input type="checkbox" data-np-platform="${k}" style="width:auto" checked> ${PLATFORMS[k].label}</label>`).join("")}</div>
+      </div>
+      ${["instagram", "facebook"].map((k) => `<div class="panel"><h3>${PLATFORMS[k].label} 文案</h3>
+        <textarea id="npCap-${k}" placeholder="貼上要發在 ${PLATFORMS[k].label} 的文字"></textarea>
+        <label>Hashtags（空格分隔）<input id="npTags-${k}" placeholder="#墨爾本留學 #auspacific_taiwan"></label></div>`).join("")}
+      <div class="actions"><button type="button" id="npSave" class="gold">建立貼文，送到 ③ 成品審核</button></div>
+    </div>
+  </div>`;
+  $("#npRand").onclick = () => { $("#npTime").value = randomSlot(); };
+  $("#npFiles").onchange = (e) => { addDraftFiles([...e.target.files]); e.target.value = ""; };
+  $("#npSave").onclick = saveNewPost;
+  for (const ta of document.querySelectorAll("#detail textarea")) { autosize(ta); ta.addEventListener("input", () => autosize(ta)); }
+}
+async function addDraftFiles(list) {
+  for (const f of list) {
+    if (f.size > MAX_UPLOAD) { toast(`${f.name} 超過 95 MB`, true); continue; }
+    const url = URL.createObjectURL(f);
+    let ratio = 0;
+    if (f.type.startsWith("image/")) ratio = await new Promise((r) => { const i = new Image(); i.onload = () => r(i.naturalWidth / i.naturalHeight); i.onerror = () => r(0); i.src = url; });
+    draft.files.push(f); draft.urls.push(url); draft.ratios.push(ratio);
+  }
+  drawDraftMedia();
+}
+function drawDraftMedia() {
+  const box = $("#npMedia"); if (!box) return;
+  box.innerHTML = draft.files.map((f, i) => `<div class="np-item">
+    ${f.type.startsWith("video/") ? `<video src="${draft.urls[i]}" muted></video>` : `<img src="${draft.urls[i]}" alt="">`}
+    <div class="np-ctl"><span>${i + 1}</span>
+      <button type="button" class="ghost" data-np-up="${i}" ${i ? "" : "disabled"}>↑</button>
+      <button type="button" class="ghost" data-np-down="${i}" ${i < draft.files.length - 1 ? "" : "disabled"}>↓</button>
+      <button type="button" class="ghost danger" data-np-del="${i}">✕</button></div>
+    ${draft.ratios[i] && (draft.ratios[i] < 0.74 || draft.ratios[i] > 1.92) ? `<small class="bad">比例不符 IG（${draft.ratios[i].toFixed(2)}）</small>` : ""}</div>`).join("");
+  const move = (i, j) => { for (const k of ["files", "urls", "ratios"]) [draft[k][i], draft[k][j]] = [draft[k][j], draft[k][i]]; drawDraftMedia(); };
+  for (const b of box.querySelectorAll("[data-np-up]")) b.onclick = () => move(+b.dataset.npUp, +b.dataset.npUp - 1);
+  for (const b of box.querySelectorAll("[data-np-down]")) b.onclick = () => move(+b.dataset.npDown, +b.dataset.npDown + 1);
+  for (const b of box.querySelectorAll("[data-np-del]")) b.onclick = () => { const i = +b.dataset.npDel; for (const k of ["files", "urls", "ratios"]) draft[k].splice(i, 1); drawDraftMedia(); };
+}
+async function saveNewPost() {
+  const vids = draft.files.filter((f) => f.type.startsWith("video/")), imgs = draft.files.filter((f) => f.type.startsWith("image/"));
+  const platforms = [...document.querySelectorAll("[data-np-platform]")].filter((c) => c.checked).map((c) => c.dataset.npPlatform);
+  const date = $("#npDate").value, time = $("#npTime").value;
+  const err = !draft.files.length ? "請先加入圖片或影片"
+    : vids.length && (vids.length > 1 || imgs.length) ? "Reel 只能放 1 支影片，不能和圖片混在一起"
+    : imgs.length > 10 ? "輪播最多 10 張" : !platforms.length ? "請勾選平台"
+    : !date ? "請選日期" : !/^(1\d|2[0-3]):(00|30)$/.test(time) ? "時間請選 10:00–23:30 的整點或半點"
+    : platforms.some((k) => !$(`#npCap-${k}`).value.trim()) ? "每個勾選的平台都要有文案" : "";
+  if (err) { toast(err, true); return; }
+  const dow = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date(`${date}T12:00:00${TZ_OFFSET}`).getUTCDay()];
+  let n = 1; while (posts.some((x) => x.id === `${date}-${dow}-upload-${n}`)) n++;
+  const id = `${date}-${dow}-upload-${n}`;
+  const names = vids.length ? [/\.mov$/i.test(vids[0].name) ? "reel.mov" : "reel.mp4"]
+    : imgs.map((f, i) => `${String(i + 1).padStart(2, "0")}.${/png$/i.test(f.type) ? "png" : "jpg"}`);
+  const tags = (k) => $(`#npTags-${k}`).value.split(/\s+/).filter(Boolean).map((x) => (x.startsWith("#") ? x : `#${x}`));
+  const post = {
+    id, status: "design_review", publish_at: `${date}T${time}:00${TZ_OFFSET}`,
+    format: vids.length ? "reel" : imgs.length > 1 ? "carousel" : "single", production: "manual",
+    series: $("#npTitle").value.trim() || "自訂貼文", theme: "", pillar: "", platforms,
+    captions: Object.fromEntries(platforms.map((k) => [k, $(`#npCap-${k}`).value])),
+    hashtags: Object.fromEntries(platforms.map((k) => [k, tags(k)])),
+    design_text: [], reel_script: null, media: names, sources: [], checks: [], review_notes: "",
+    history: [{ at: nowIso(), by: "dashboard", action: "uploaded finished post", detail: `${names.length} file(s)` }],
+  };
+  const btn = $("#npSave"); btn.disabled = true;
+  try {
+    const files = vids.length ? vids : imgs;
+    for (let i = 0; i < files.length; i++) { toast(`上傳中… ${i + 1}/${files.length}`); await uploadFile(id, names[i], files[i]); }
+    const entry = { id, post, sha: undefined };
+    await savePost(entry, `New post ${id} (uploaded by owner)`);
+    posts.push(entry); posts.sort((a, b) => (a.post.publish_at || "").localeCompare(b.post.publish_at || ""));
+    draft.urls.forEach((u) => URL.revokeObjectURL(u)); draft = null;
+    toast("已建立，請在 ③ 成品審核確認並核准");
+    await openPost(id);
+  } catch (e) { toast(e.message, true); btn.disabled = false; }
+}
+
 // ---------- helpers ----------
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -717,6 +817,7 @@ $("#tabs").onclick = (e) => {
   renderList();
 };
 $("#refreshBtn").onclick = () => refreshList();
+$("#newBtn").onclick = () => openNewPost();
 $("#backBtn").onclick = () => {
   if (current && changedFromSaved() && !confirm("有未儲存的修改，確定離開？")) return;
   current = null;
