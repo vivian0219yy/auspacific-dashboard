@@ -288,6 +288,32 @@ async function requestGenerate() {
   } catch (e) { toast(e.message, true); }
 }
 
+
+// ---------- publishing health: last check + 「立即檢查發布」 ----------
+let lastRun = null;
+async function readLastRun() {
+  try { return JSON.parse(b64decode((await (await gh(`contents/status/last-run.json?${ref()}`)).json()).content)); } catch { return null; }
+}
+function showPubStatus() {
+  const box = $("#pubStatus"); if (!box) return;
+  const now = Date.now();
+  const overdue = posts.filter((x) => x.post.status === "approved" && new Date(x.post.publish_at) < now - 15 * 60e3);
+  const last = lastRun?.at ? new Date(lastRun.at).getTime() : 0;
+  const msgs = [];
+  if (overdue.length && now - last > 60 * 60e3) msgs.push(`⚠️ 有 ${overdue.length} 篇已過發布時間還沒發出（最後一次檢查：${last ? fmtTime(lastRun.at) : "未知"}）。按「⚡ 立即檢查發布」補發；超過 6 小時會變成「錯過」。`);
+  if (lastRun?.dry_run) msgs.push("🧪 測試模式中（DRY_RUN=1）：到時間只會記錄，不會真的發布。");
+  box.hidden = !msgs.length; box.innerHTML = msgs.map(esc).join("<br>");
+}
+async function requestPublishNow() {
+  if (!confirm("現在就檢查並發布所有已到時間的貼文？（還沒到時間的不會提早發）")) return;
+  try {
+    let sha; try { sha = (await (await gh(`contents/requests/publish.json?${ref()}`)).json()).sha; } catch { /* first time */ }
+    const body = JSON.stringify({ requested_at: nowIso() }, null, 2) + "\n";
+    await gh(`contents/requests/publish.json`, { method: "PUT", body: JSON.stringify({ message: "Publish check requested from the dashboard", content: b64encode(body), branch: branch(), ...(sha ? { sha } : {}) }) });
+    toast("已送出，約 1–3 分鐘後按 ↻ 看結果");
+  } catch (e) { toast(e.message, true); }
+}
+
 // ---------- helpers ----------
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -429,6 +455,7 @@ async function refreshList() {
     const [ps, b, t, lg] = await Promise.all([listPosts(), readCfg("brand"), readCfg("templates"), readLog()]);
     posts = ps; siteCfg = { brand: b, templates: t }; postLog = Array.isArray(lg) ? lg : [];
     readGenRequest().then(({ req }) => showGenStatus(req));
+    readLastRun().then((r) => { lastRun = r; showPubStatus(); });
   } catch (e) {
     $("#listMsg").textContent = e.message;
     return;
@@ -888,6 +915,7 @@ $("#tabs").onclick = (e) => {
 $("#refreshBtn").onclick = () => refreshList();
 $("#newBtn").onclick = () => openNewPost();
 $("#genBtn").onclick = () => requestGenerate();
+$("#pubBtn").onclick = () => requestPublishNow();
 $("#backBtn").onclick = () => {
   if (current && changedFromSaved() && !confirm("有未儲存的修改，確定離開？")) return;
   current = null;
