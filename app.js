@@ -248,6 +248,46 @@ async function saveNewPost() {
   } catch (e) { toast(e.message, true); btn.disabled = false; }
 }
 
+
+// ---------- 「產生下週內容」: asks GitHub to start the claude.ai writing task ----------
+function nextMonday() {
+  const [d] = splitLocal(new Date().toISOString());
+  const t = new Date(`${d}T12:00:00${TZ_OFFSET}`); const dow = t.getUTCDay();
+  t.setUTCDate(t.getUTCDate() + ((8 - dow) % 7 || 7));
+  return t.toISOString().slice(0, 10);
+}
+async function readGenRequest() {
+  try { const f = await (await gh(`contents/requests/generate.json?${ref()}`)).json(); return { sha: f.sha, req: JSON.parse(b64decode(f.content)) }; }
+  catch { return { sha: undefined, req: null }; }
+}
+function showGenStatus(req) {
+  const box = $("#genStatus"); if (!box) return;
+  if (!req || (req.status !== "requested" && req.at && Date.now() - new Date(req.at) > 3 * 864e5)) { box.hidden = true; return; }
+  const when = req.at ? fmtTime(req.at) : "";
+  box.hidden = false;
+  box.className = `gen-status ${req.status}`;
+  box.innerHTML = req.status === "requested" ? `⏳ 已送出：${esc(req.week)} 那週的內容，正在啟動寫稿…`
+    : req.status === "started" ? `✨ ${esc(req.week)} 那週的內容已開始產生（${esc(when)}），約 20–30 分鐘後出現在 ① 內容審核。${req.session_url ? ` <a href="${esc(req.session_url)}" target="_blank" rel="noopener">查看進度</a>` : ""}`
+    : `⚠️ 無法開始產生（${esc(when)}）：${esc(req.message || "")}`;
+}
+async function requestGenerate() {
+  const week = prompt("要產生哪一週的內容？（那週的星期一，格式 YYYY-MM-DD）", nextMonday());
+  if (week === null) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(week) || new Date(`${week}T12:00:00${TZ_OFFSET}`).getUTCDay() !== 1) { toast("請輸入星期一的日期，例如 2026-11-30", true); return; }
+  try {
+    const { sha, req: old } = await readGenRequest();
+    if (old && old.status === "requested") { toast("已經有一個請求在處理中", true); return; }
+    const req = { week, status: "requested", requested_at: nowIso() };
+    await gh(`contents/requests/generate.json`, { method: "PUT", body: JSON.stringify({ message: `Request content for week of ${week}`, content: b64encode(JSON.stringify(req, null, 2) + "\n"), branch: branch(), ...(sha ? { sha } : {}) }) });
+    showGenStatus(req); toast("已送出，GitHub 正在啟動寫稿");
+    for (let i = 0; i < 12; i++) {
+      await new Promise((r) => setTimeout(r, 10000));
+      const { req: now } = await readGenRequest();
+      if (now && now.status !== "requested") { showGenStatus(now); return; }
+    }
+  } catch (e) { toast(e.message, true); }
+}
+
 // ---------- helpers ----------
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -329,6 +369,7 @@ function lint(post, stage) {
     else { const hh = +splitLocal(post.publish_at)[1].slice(0, 2); if (hh < 10 || hh > 23) issues.push(["bad", "發布時間請在 10:00–23:30 之間（台北時間）"]); }
     if (post.format === "story") issues.push(["bad", "限動要在 IG App 手動發（投票／問答貼紙無法用 API 發布）"]);
   }
+  issues.push(...duplicateIssues(post));
   const all = (dt + " " + Object.values(post.captions || {}).join(" ") + " " + (post.reel_script ? reelText(post.reel_script) : "")).replace(/\s+/g, "");
   (post.checks || []).forEach((c, i) => {
     const fixed = c.match && !all.includes(String(c.match).replace(/\s+/g, ""));
@@ -351,6 +392,33 @@ function reelConsistency(post) {
 }
 
 // ---------- list view ----------
+let postLog = [];
+async function readLog() {
+  try { return JSON.parse(b64decode((await (await gh(`contents/drafting/post-log.json?${ref()}`)).json()).content)); } catch { return []; }
+}
+// Character-pair (bigram) similarity, 0..1, ignoring spaces, punctuation and emoji.
+function similarity(a, b) {
+  const norm = (s) => [...String(s || "").replace(/[\s\p{P}\p{S}\p{Extended_Pictographic}]/gu, "")];
+  const grams = (s) => { const c = norm(s), m = new Map(); for (let i = 0; i < c.length - 1; i++) { const g = c[i] + c[i + 1]; m.set(g, (m.get(g) || 0) + 1); } return m; };
+  const A = grams(a), B = grams(b); let both = 0, na = 0, nb = 0;
+  for (const v of A.values()) na += v; for (const v of B.values()) nb += v;
+  for (const [g, v] of A) both += Math.min(v, B.get(g) || 0);
+  return na + nb ? (2 * both) / (na + nb) : 0;
+}
+function coverLine(p) { const pg = (p.design_text || [])[0]; return pg && typeof pg.text === "string" ? (pg.text.split("\n").find((l) => l.trim()) || "") : ""; }
+function firstCaption(p) { const c = (p.captions || {}); return (String(c.instagram || c.facebook || "").split("\n").find((l) => l.trim()) || ""); }
+function duplicateIssues(post) {
+  const mine = [["封面", coverLine(post)], ["文案開頭", firstCaption(post)]].filter(([, t]) => [...t].length >= 6);
+  const others = [...postLog.map((e) => ({ id: e.id, date: e.date, cover: e.cover, cap: e.first_caption_line })),
+    ...posts.filter((x) => x.id !== post.id && x.post.status !== "rejected").map((x) => ({ id: x.id, date: (x.post.publish_at || "").slice(0, 10), cover: coverLine(x.post), cap: firstCaption(x.post) }))];
+  const out = [];
+  for (const [what, text] of mine) {
+    let best = null;
+    for (const o of others) { const s = Math.max(similarity(text, o.cover), similarity(text, o.cap)); if (s >= 0.6 && (!best || s > best.s)) best = { ...o, s }; }
+    if (best) out.push(["warn", `可能和 ${best.date} 的貼文重複（${what}相似度 ${Math.round(best.s * 100)}%）：同主題可以，內容和角度要換`]);
+  }
+  return out;
+}
 async function readCfg(name) {
   try { return JSON.parse(b64decode((await (await gh(`contents/config/${name}.json?${ref()}`)).json()).content)); } catch { return {}; }
 }
@@ -358,8 +426,9 @@ async function refreshList() {
   $("#listMsg").textContent = "載入中…";
   $("#postList").innerHTML = "";
   try {
-    const [ps, b, t] = await Promise.all([listPosts(), readCfg("brand"), readCfg("templates")]);
-    posts = ps; siteCfg = { brand: b, templates: t };
+    const [ps, b, t, lg] = await Promise.all([listPosts(), readCfg("brand"), readCfg("templates"), readLog()]);
+    posts = ps; siteCfg = { brand: b, templates: t }; postLog = Array.isArray(lg) ? lg : [];
+    readGenRequest().then(({ req }) => showGenStatus(req));
   } catch (e) {
     $("#listMsg").textContent = e.message;
     return;
@@ -818,6 +887,7 @@ $("#tabs").onclick = (e) => {
 };
 $("#refreshBtn").onclick = () => refreshList();
 $("#newBtn").onclick = () => openNewPost();
+$("#genBtn").onclick = () => requestGenerate();
 $("#backBtn").onclick = () => {
   if (current && changedFromSaved() && !confirm("有未儲存的修改，確定離開？")) return;
   current = null;

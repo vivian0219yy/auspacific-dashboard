@@ -119,3 +119,5 @@ legend input.pname { display: inline-block; width: auto; min-width: 160px; paddi
 .np-ctl { display: flex; gap: 4px; align-items: center; margin-top: 4px; font-size: 13px; }
 .np-ctl button { padding: 2px 8px; }
 .np-item small.bad { color: var(--bad); }
+.gen-status { padding: 10px 12px; border-radius: 8px; margin: 0 0 10px; background: #E8EEF8; color: #2B5BA8; font-size: 14px; }
+.gen-status.error { background: #FBE7E6; color: var(--bad); }
