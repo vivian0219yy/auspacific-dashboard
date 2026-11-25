@@ -132,6 +132,22 @@ async function uploadFile(id, name, file) {
   });
 }
 
+async function deletePost(id) {
+  const files = await (await gh(`contents/posts/${id}?${ref()}`)).json();
+  for (const f of files.filter((x) => x.type === "file")) {
+    await gh(`contents/posts/${id}/${encodeURIComponent(f.name)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ message: `Delete ${id}: ${f.name}`, sha: f.sha, branch: branch() }),
+    });
+  }
+}
+
+// A random :00 or :30 slot between 10:00 and 23:30 (Taipei).
+function randomSlot() {
+  const n = Math.floor(Math.random() * 28); // 10:00 … 23:30
+  return `${String(10 + Math.floor(n / 2)).padStart(2, "0")}:${n % 2 ? "30" : "00"}`;
+}
+
 // ---------- helpers ----------
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -210,7 +226,7 @@ function lint(post, stage) {
     if (!post.publish_at) issues.push(["bad", "沒有設定發布時間"]);
     else if (new Date(post.publish_at) < new Date()) issues.push(["bad", "發布時間已經過了"]);
     else if (!/T\d\d:(00|30):00/.test(post.publish_at)) issues.push(["bad", "發布時間請選整點或半點（系統在 :00 和 :30 發布）"]);
-    else { const hh = +splitLocal(post.publish_at)[1].slice(0, 2); if (hh < 8 || hh > 23) issues.push(["bad", "發布時間請在 08:00–23:30 之間（台北時間）"]); }
+    else { const hh = +splitLocal(post.publish_at)[1].slice(0, 2); if (hh < 10 || hh > 23) issues.push(["bad", "發布時間請在 10:00–23:30 之間（台北時間）"]); }
     if (post.format === "story") issues.push(["bad", "限動要在 IG App 手動發（投票／問答貼紙無法用 API 發布）"]);
   }
   const all = (dt + " " + Object.values(post.captions || {}).join(" ") + " " + (post.reel_script ? reelText(post.reel_script) : "")).replace(/\s+/g, "");
@@ -452,7 +468,8 @@ function renderDetail(selectedMedia = 0) {
         <h3>發布時間與平台（台北時間）</h3>
         <div class="row">
           <label>日期<input type="date" id="fDate" value="${date}" ${editable ? "" : "disabled"}></label>
-          <label>時間<input type="time" id="fTime" step="1800" value="${time}" ${editable ? "" : "disabled"}></label>
+          <label>時間<input type="time" id="fTime" step="1800" min="10:00" max="23:30" value="${time}" ${editable ? "" : "disabled"}></label>
+          ${editable ? `<button type="button" id="randTime" class="ghost" style="flex:0 0 auto;align-self:end;margin-bottom:10px" title="同一天 10:00–23:30 隨機挑一個整點或半點">🎲 隨機時間</button>` : ""}
         </div>
         <div class="row">${Object.entries(PLATFORMS).map(([k, v]) => `<label style="flex:0 0 auto;font-weight:400">
           <input type="checkbox" data-platform="${k}" style="width:auto" ${(p.platforms || []).includes(k) ? "checked" : ""} ${editable ? "" : "disabled"}> ${v.label}</label>`).join("")}</div>
@@ -483,6 +500,7 @@ function renderDetail(selectedMedia = 0) {
         ${stage === "final" ? `<button type="button" data-act="approve" class="gold">核准成品並排程</button>` : ""}
         ${p.status === "approved" ? `<button type="button" data-act="unschedule">取消排程</button>` : ""}
         ${stage !== "other" || ["content_approved", "ready_to_film"].includes(p.status) ? `<button type="button" data-act="reject" class="danger ghost">退回</button>` : ""}
+        <button type="button" data-act="delete" class="danger ghost">🗑 刪除</button>
       </div>
     </div>
   </div>`;
@@ -507,6 +525,7 @@ function renderDetail(selectedMedia = 0) {
     collectForm(); p.checks.splice(+b.dataset.resolve, 1); stamp(p, "check resolved by reviewer", c.message); renderDetail();
   };
   $("#uploadBtn")?.addEventListener("click", uploadVideo);
+  $("#randTime")?.addEventListener("click", () => { $("#fTime").value = randomSlot(); collectForm(); renderDetail(selectedMedia); toast(`時間改為 ${$("#fTime").value}，記得儲存或核准`); });
   $("#addPage")?.addEventListener("click", () => { collectForm(); const pg = p.design_text; pg.splice(Math.max(pg.length - 1, 1), 0, { name: "新頁", text: "標題\n\n💡 重點" }); renderDetail(); });
   for (const b of document.querySelectorAll("[data-delpage]")) b.onclick = () => { if (!confirm("刪除這一頁？")) return; collectForm(); p.design_text.splice(+b.dataset.delpage, 1); renderDetail(); };
   for (const ta of document.querySelectorAll("textarea.script, #fCaption")) { autosize(ta); ta.addEventListener("input", () => autosize(ta)); }
@@ -666,6 +685,15 @@ async function act(kind) {
       p.status = "design_review"; delete p.approval; stamp(p, "unscheduled");
       await savePost(current, `Unschedule ${current.id}`);
       toast("已取消排程");
+    } else if (kind === "delete") {
+      const note = p.status === "published" ? "\n\n（只刪除系統裡的紀錄，已發布到 IG／FB 的貼文不會被刪除。）" : p.status === "approved" ? "\n\n排程會一起取消，這篇不會發布。" : "";
+      if (!confirm(`永久刪除這篇？\n\n${p.series || ""}｜${fmtTime(p.publish_at)}${note}`)) return;
+      await deletePost(current.id);
+      posts = posts.filter((x) => x.id !== current.id);
+      current = null;
+      $("#detailView").hidden = true; $("#listView").hidden = false; renderList();
+      toast("已刪除");
+      return;
     } else if (kind === "reject") {
       const reason = prompt("退回原因（下次寫稿會參考）：", "");
       if (reason === null) return;
