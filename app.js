@@ -366,6 +366,77 @@ function renderCalendar() {
   for (const b of document.querySelectorAll("[data-open]")) b.onclick = () => openPost(b.dataset.open);
 }
 
+
+// ---------- 手動發布: download everything and post it yourself ----------
+function manualPanel(p) {
+  const names = (p.media || []).filter((n) => current.media[n]?.url);
+  if (!names.length || !["design_review", "approved", "failed", "missed", "changed_after_approval", "published"].includes(p.status)) return "";
+  const plats = (p.platforms || []).filter((k) => (p.captions || {})[k]);
+  return `<details class="panel" ${["failed", "missed"].includes(p.status) ? "open" : ""}><summary><h3>手動發布（下載素材）</h3></summary>
+    <p class="muted" style="margin-top:0">系統發不出去時（例如 Meta 金鑰失效），可以下載圖片和文案，自己用 IG／FB App 發。發完按最下面的按鈕，系統就不會再發一次。</p>
+    <div class="row" style="flex-wrap:wrap">
+      <button type="button" id="dlZip">⬇ 下載全部（ZIP）</button>
+      ${plats.map((k) => `<button type="button" class="ghost" data-copycap="${k}">複製 ${PLATFORMS[k]?.label || k} 文案</button>`).join("")}
+    </div>
+    <p class="muted" style="margin:10px 0 4px">單張下載（手機建議用這個，長按圖片可存到相簿）：</p>
+    <div class="dl-list">${names.map((n, i) => `<a class="dl-item" href="${current.media[n].url}" download="${esc(dlName(p, n))}">${/\.(mp4|mov)$/i.test(n) ? `🎬 ${esc(n)}` : `<img src="${current.media[n].url}" alt="${i + 1}"><span>${i + 1}</span>`}</a>`).join("")}</div>
+    ${p.status !== "published" ? `<button type="button" id="markManual" class="gold" style="margin-top:10px">✓ 我已手動發布</button>` : ""}
+  </details>`;
+}
+function dlName(p, n) { return `${splitLocal(p.publish_at)[0] || "post"}-${n}`; }
+async function loadJSZip() {
+  if (window.JSZip) return window.JSZip;
+  await new Promise((ok, bad) => { const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"; s.onload = ok; s.onerror = () => bad(new Error("ZIP 工具載入失敗，請改用單張下載")); document.head.appendChild(s); });
+  return window.JSZip;
+}
+function saveBlob(blob, name) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.style.display = "none";
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+function logEntry(p) {
+  const pages = (p.design_text || []).filter((x) => typeof x.text === "string");
+  const firsts = pages.map((x) => x.text.split("\n").find((l) => l.trim()) || "");
+  const cover = firsts[0] || "", kw = cover.match(/「(.+?)」/);
+  return { id: p.id, date: (p.publish_at || "").slice(0, 10), format: p.format, series: p.series, pillar: p.pillar, theme: p.theme,
+    template: p.template, cover, keyword: kw ? kw[1] : "", page_titles: firsts.slice(1), first_caption_line: firstCaption(p), figures: [], manual: true };
+}
+function wireManual(p) {
+  $("#dlZip")?.addEventListener("click", async () => {
+    try {
+      toast("打包中…");
+      const JSZip = await loadJSZip(); const zip = new JSZip();
+      for (const n of p.media || []) if (current.media[n]?.url) zip.file(n, await (await fetch(current.media[n].url)).blob());
+      for (const k of p.platforms || []) if ((p.captions || {})[k]) zip.file(`${k}-caption.txt`, finalCaption(p, k));
+      saveBlob(await zip.generateAsync({ type: "blob" }), `${splitLocal(p.publish_at)[0] || "post"}-${p.id.split("-").slice(4).join("-") || "post"}.zip`);
+      toast("已下載");
+    } catch (e) { toast(e.message, true); }
+  });
+  for (const b of document.querySelectorAll("[data-copycap]")) b.onclick = async () => {
+    try { await navigator.clipboard.writeText(finalCaption(p, b.dataset.copycap)); toast(`已複製 ${PLATFORMS[b.dataset.copycap]?.label} 文案（含 hashtags）`); } catch { toast("無法複製，請手動選取", true); }
+  };
+  $("#markManual")?.addEventListener("click", async () => {
+    if (!confirm("確定已經在 IG／FB 手動發布了？\n標記後系統不會再自動發這篇。")) return;
+    const results = { ...(p.results || {}) };
+    for (const k of p.platforms || []) {
+      if (results[k]) continue;
+      const link = prompt(`${PLATFORMS[k]?.label || k} 貼文連結（可留空）`, "");
+      if (link === null) return;
+      results[k] = { permalink: link.trim(), manual: true, at: nowIso() };
+    }
+    try {
+      p.results = results; p.status = "published"; stamp(p, "published manually", (p.platforms || []).join(", "));
+      await savePost(current, `Mark ${current.id} as published manually`);
+      try {
+        let sha, log = [];
+        try { const f = await (await gh(`contents/drafting/post-log.json?${ref()}`)).json(); sha = f.sha; log = JSON.parse(b64decode(f.content)); } catch { /* no log yet */ }
+        log = log.filter((e) => e.id !== p.id).concat([logEntry(p)]); postLog = log;
+        await gh(`contents/drafting/post-log.json`, { method: "PUT", body: JSON.stringify({ message: `Post log: ${p.id} (manual)`, content: b64encode(JSON.stringify(log, null, 2) + "\n"), branch: branch(), ...(sha ? { sha } : {}) }) });
+      } catch { /* the post is marked; the log is best-effort */ }
+      syncList(); toast("已標記為已發布"); renderDetail();
+    } catch (e) { toast(e.status === 409 ? "這篇在別處被更新了，請返回列表重新開啟。" : e.message, true); }
+  });
+}
+
 // ---------- helpers ----------
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -736,6 +807,7 @@ function renderDetail(selectedMedia = 0) {
     <div>
       ${stage === "content" && Array.isArray(p.design_text) && p.design_text.length ? `<div class="panel"><h3>圖片即時預覽</h3><p class="muted" style="margin-top:0">邊改邊看；核准內容後會依這個樣子產生圖片。</p><div class="pv" id="pv"></div></div>` : mediaPanel}
       ${uploadPanel}
+      ${manualPanel(p)}
       <div class="panel">
         <h3>檢查</h3>
         ${issues.length ? `<ul class="checks">${issues.map(([lvl, msg, ci]) => `<li class="${lvl}">${esc(msg)}${ci !== undefined && editable ? ` <button type="button" class="ghost resolve" data-resolve="${ci}">標記已處理</button>` : ""}</li>`).join("")}</ul>` : `<p class="muted" style="margin:0">沒有發現問題</p>`}
@@ -819,6 +891,7 @@ function renderDetail(selectedMedia = 0) {
   };
   $("#uploadBtn")?.addEventListener("click", uploadVideo);
   if (p.reel_script) wireReel(p);
+  wireManual(p);
   $("#randTime")?.addEventListener("click", () => { $("#fTime").value = randomSlot(); collectForm(); renderDetail(selectedMedia); toast(`時間改為 ${$("#fTime").value}，記得儲存或核准`); });
   $("#addPage")?.addEventListener("click", () => { collectForm(); const pg = p.design_text; pg.splice(Math.max(pg.length - 1, 1), 0, { name: "新頁", text: "標題\n\n💡 重點" }); renderDetail(); });
   for (const b of document.querySelectorAll("[data-delpage]")) b.onclick = () => { if (!confirm("刪除這一頁？")) return; collectForm(); p.design_text.splice(+b.dataset.delpage, 1); renderDetail(); };
