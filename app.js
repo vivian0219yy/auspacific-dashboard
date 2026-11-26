@@ -314,6 +314,58 @@ async function requestPublishNow() {
   } catch (e) { toast(e.message, true); }
 }
 
+
+// ---------- 📅 calendar ----------
+let calMonth = null, calOnlyScheduled = false;
+const FORMAT_ICON = { carousel: "▦", single: "▢", reel: "▶", story: "◎" };
+function stageClass(st) {
+  return st === "published" ? "pub" : st === "approved" ? "sched" : ["failed", "missed", "changed_after_approval"].includes(st) ? "bad"
+    : st === "rejected" ? "rej" : "draft";
+}
+function renderCalendar() {
+  const today = splitLocal(new Date().toISOString())[0];
+  calMonth ||= today.slice(0, 7);
+  const [y, m] = calMonth.split("-").map(Number);
+  const first = new Date(Date.UTC(y, m - 1, 1)), days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const lead = (first.getUTCDay() + 6) % 7; // Monday first
+  const byDay = {};
+  for (const { id, post } of posts) {
+    if (!post.publish_at) continue;
+    if (calOnlyScheduled && !["approved", "published"].includes(post.status)) continue;
+    const [d, t] = splitLocal(post.publish_at);
+    if (d.slice(0, 7) !== calMonth) continue;
+    (byDay[d] ||= []).push({ id, post, t });
+  }
+  for (const k in byDay) byDay[k].sort((a, b) => a.t.localeCompare(b.t));
+  const chip = ({ id, post, t }) => `<button type="button" class="cal-chip ${stageClass(post.status)}" data-open="${esc(id)}" title="${esc(STATUS[post.status] || post.status)}">
+      <span class="t">${esc(t)}</span> ${FORMAT_ICON[post.format] || ""} ${esc(post.series || id)}</button>`;
+  let cells = "";
+  for (let i = 0; i < lead; i++) cells += `<div class="cal-day empty"></div>`;
+  for (let d = 1; d <= days; d++) {
+    const ds = `${calMonth}-${String(d).padStart(2, "0")}`, dow = (lead + d - 1) % 7;
+    cells += `<div class="cal-day${ds === today ? " today" : ""}${dow >= 5 ? " weekend" : ""}"><div class="n">${d}</div>${(byDay[ds] || []).map(chip).join("")}</div>`;
+  }
+  const WD = ["一", "二", "三", "四", "五", "六", "日"];
+  const agenda = Object.keys(byDay).sort().map((ds) => {
+    const wd = WD[(new Date(`${ds}T12:00:00Z`).getUTCDay() + 6) % 7];
+    return `<div class="cal-agenda-day${ds === today ? " today" : ""}"><div class="n">${+ds.slice(5, 7)}/${+ds.slice(8)}（${wd}）</div>${byDay[ds].map(chip).join("")}</div>`;
+  }).join("") || `<p class="muted">這個月沒有貼文。</p>`;
+  $("#listMsg").textContent = "";
+  $("#postList").innerHTML = `<div class="cal-bar">
+      <button type="button" id="calPrev" class="ghost">‹</button><strong>${y} 年 ${m} 月</strong><button type="button" id="calNext" class="ghost">›</button>
+      <button type="button" id="calToday" class="ghost">今天</button>
+      <label class="cal-only"><input type="checkbox" id="calOnly" ${calOnlyScheduled ? "checked" : ""}> 只看已排程與已發布</label></div>
+    <div class="cal-legend"><span class="cal-chip draft">草稿／審核中</span><span class="cal-chip sched">已排程</span><span class="cal-chip pub">已發布</span><span class="cal-chip bad">失敗／錯過</span>
+      <span class="muted">▦ 輪播 ▢ 單圖 ▶ Reel ◎ 限動</span></div>
+    <div class="cal-grid">${WD.map((w) => `<div class="cal-head">${w}</div>`).join("")}${cells}</div>
+    <div class="cal-agenda">${agenda}</div>`;
+  const shift = (k) => { const dt = new Date(Date.UTC(y, m - 1 + k, 1)); calMonth = dt.toISOString().slice(0, 7); renderCalendar(); };
+  $("#calPrev").onclick = () => shift(-1); $("#calNext").onclick = () => shift(1);
+  $("#calToday").onclick = () => { calMonth = today.slice(0, 7); renderCalendar(); };
+  $("#calOnly").onchange = (e) => { calOnlyScheduled = e.target.checked; renderCalendar(); };
+  for (const b of document.querySelectorAll("[data-open]")) b.onclick = () => openPost(b.dataset.open);
+}
+
 // ---------- helpers ----------
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -435,8 +487,9 @@ function coverLine(p) { const pg = (p.design_text || [])[0]; return pg && typeof
 function firstCaption(p) { const c = (p.captions || {}); return (String(c.instagram || c.facebook || "").split("\n").find((l) => l.trim()) || ""); }
 function duplicateIssues(post) {
   const mine = [["封面", coverLine(post)], ["文案開頭", firstCaption(post)]].filter(([, t]) => [...t].length >= 6);
-  const others = [...postLog.map((e) => ({ id: e.id, date: e.date, cover: e.cover, cap: e.first_caption_line })),
-    ...posts.filter((x) => x.id !== post.id && x.post.status !== "rejected").map((x) => ({ id: x.id, date: (x.post.publish_at || "").slice(0, 10), cover: coverLine(x.post), cap: firstCaption(x.post) }))];
+  // Same-week posts share one theme on purpose (一個主題用五次), so only other weeks count as repeats.
+  const others = [...postLog.filter((e) => e.id !== post.id && mondayOf(`${e.date}T12:00:00+08:00`) !== mondayOf(post.publish_at)).map((e) => ({ id: e.id, date: e.date, cover: e.cover, cap: e.first_caption_line })),
+    ...posts.filter((x) => x.id !== post.id && x.post.status !== "rejected" && mondayOf(x.post.publish_at) !== mondayOf(post.publish_at)).map((x) => ({ id: x.id, date: (x.post.publish_at || "").slice(0, 10), cover: coverLine(x.post), cap: firstCaption(x.post) }))];
   const out = [];
   for (const [what, text] of mine) {
     let best = null;
@@ -463,13 +516,14 @@ async function refreshList() {
   renderList();
 }
 function renderList() {
+  if (filter === "calendar") return renderCalendar();
   const allowed = FILTERS[filter];
   const shown = posts.filter((p) => !allowed || allowed.includes(p.post.status));
   for (const b of document.querySelectorAll("#tabs button[data-filter]")) {
     const a = FILTERS[b.dataset.filter];
     const n = posts.filter((p) => !a || a.includes(p.post.status)).length;
     b.querySelector("span")?.remove();
-    if (n && b.dataset.filter !== "all") b.insertAdjacentHTML("beforeend", `<span class="count">${n}</span>`);
+    if (n && !["all", "calendar"].includes(b.dataset.filter)) b.insertAdjacentHTML("beforeend", `<span class="count">${n}</span>`);
   }
   $("#listMsg").textContent = shown.length ? "" : "這裡目前沒有貼文。";
   let html = "", lastWeek = "";
@@ -500,6 +554,7 @@ function renderList() {
 
 // ---------- detail view ----------
 async function openPost(id) {
+  reelTab = null;
   const entry = posts.find((p) => p.id === id);
   if (!entry) return;
   $("#listView").hidden = true;
@@ -581,19 +636,61 @@ function designTextPanel(p, editable) {
   return html + (editable ? `</div>` : `</details>`);
 }
 
+// ---------- Reel script: 分鏡表 + 純文字 ----------
+let reelTab = null;
+function shotTimes(rs) {
+  const shots = rs.shots || [], n = shots.length || 1, d = +rs.duration_s || 0;
+  return shots.map((s, i) => s.sec || (d ? `${Math.round((d * i) / n)}–${Math.round((d * (i + 1)) / n)}` : ""));
+}
+function reelPlainText(p) {
+  const rs = p.reel_script || {}, times = shotTimes(rs);
+  const out = [`主題：${rs.topic || ""}　長度：${rs.duration_s || "?"} 秒`, `開頭鉤子：${rs.hook || ""}`, ""];
+  (rs.shots || []).forEach((s, i) => out.push(`【鏡頭 ${i + 1}${times[i] ? `｜${times[i]} 秒` : ""}】`, `畫面：${s.visual || ""}`, `字幕：${s.on_screen || ""}`, `口白：${s.voice || ""}`, ""));
+  out.push("—— 口白稿 ——", ...(rs.shots || []).map((s) => s.voice || "").filter(Boolean));
+  if (rs.caption_note) out.push("", `備註：${rs.caption_note}`);
+  return out.join("\n");
+}
 function reelPanel(p, editable) {
   const rs = p.reel_script;
   if (!rs) return "";
   const dis = editable ? "" : "disabled";
-  return `<${editable ? "div" : "details open"} class="panel"><${editable ? "h3" : "summary"}>Reel 腳本（手動拍攝）</${editable ? "h3" : "summary"}>
-    <label>主題<input data-rs="topic" value="${esc(rs.topic)}" ${dis}></label>
+  const tab = reelTab || (editable ? "table" : "text");
+  const times = shotTimes(rs);
+  const cell = (i, k, v) => `<textarea class="rs-cell" data-shot="${i}.${k}" rows="1" ${dis}>${esc(v || "")}</textarea>`;
+  const table = `<div class="row">
+      <label>主題<input data-rs="topic" value="${esc(rs.topic)}" ${dis}></label>
+      <label style="flex:0 0 110px">長度（秒）<input data-rs="duration_s" type="number" min="10" max="90" value="${esc(rs.duration_s)}" ${dis}></label></div>
     <label>開頭鉤子（第一秒要看得懂）<input data-rs="hook" value="${esc(rs.hook)}" ${dis}></label>
-    <label>長度（秒）<input data-rs="duration_s" type="number" min="10" max="90" value="${esc(rs.duration_s)}" ${dis}></label>
-    ${(rs.shots || []).map((s, i) => `<fieldset class="dt-page"><legend>鏡頭 ${esc(s.s ?? i + 1)}</legend>
-      <label>畫面<input data-shot="${i}.visual" value="${esc(s.visual)}" ${dis}></label>
-      <label>字幕／畫面文字<input data-shot="${i}.on_screen" value="${esc(s.on_screen)}" ${dis}></label>
-      <label>口白<textarea data-shot="${i}.voice" rows="2" style="min-height:0" ${dis}>${esc(s.voice)}</textarea></label></fieldset>`).join("")}
-    ${rs.caption_note ? `<p class="muted">${esc(rs.caption_note)}</p>` : ""}</${editable ? "div" : "details"}>`;
+    <table class="storyboard"><thead><tr><th>鏡頭</th><th>秒數</th><th>畫面</th><th>字幕</th><th>口白</th>${editable ? "<th></th>" : ""}</tr></thead><tbody>
+    ${(rs.shots || []).map((s, i) => `<tr>
+      <td data-h="鏡頭">${i + 1}</td>
+      <td data-h="秒數"><input class="rs-sec" data-shot="${i}.sec" value="${esc(s.sec || "")}" placeholder="${esc(times[i])}" ${dis}></td>
+      <td data-h="畫面">${cell(i, "visual", s.visual)}</td>
+      <td data-h="字幕">${cell(i, "on_screen", s.on_screen)}</td>
+      <td data-h="口白">${cell(i, "voice", s.voice)}</td>
+      ${editable ? `<td><button type="button" class="ghost danger" data-delshot="${i}" title="刪除這個鏡頭">✕</button></td>` : ""}</tr>`).join("")}
+    </tbody></table>
+    ${editable ? `<button type="button" id="addShot">＋ 新增鏡頭</button>` : ""}`;
+  const text = `<pre class="reel-text" id="reelText">${esc(reelPlainText(p))}</pre>
+    <div class="row" style="flex-wrap:wrap"><button type="button" id="copyReel" class="ghost">複製全文</button><button type="button" id="dlReel" class="ghost">下載 .txt</button></div>`;
+  return `<div class="panel"><h3>Reel 腳本（手動拍攝）</h3>
+    <div class="platform-tabs"><button type="button" data-reeltab="table" class="${tab === "table" ? "active" : ""}">分鏡表</button><button type="button" data-reeltab="text" class="${tab === "text" ? "active" : ""}">純文字</button></div>
+    <div ${tab === "table" ? "" : "hidden"}>${table}</div><div ${tab === "text" ? "" : "hidden"}>${text}</div>
+    ${rs.caption_note ? `<p class="muted">${esc(rs.caption_note)}</p>` : ""}</div>`;
+}
+function wireReel(p) {
+  for (const b of document.querySelectorAll("[data-reeltab]")) b.onclick = () => { collectForm(); reelTab = b.dataset.reeltab; renderDetail(); };
+  for (const ta of document.querySelectorAll("textarea.rs-cell")) { autosize(ta); ta.addEventListener("input", () => autosize(ta)); }
+  $("#addShot")?.addEventListener("click", () => { collectForm(); (p.reel_script.shots ||= []).push({ s: p.reel_script.shots.length + 1, visual: "", on_screen: "", voice: "" }); renderDetail(); });
+  for (const b of document.querySelectorAll("[data-delshot]")) b.onclick = () => { if (!confirm("刪除這個鏡頭？")) return; collectForm(); p.reel_script.shots.splice(+b.dataset.delshot, 1); p.reel_script.shots.forEach((s, i) => (s.s = i + 1)); renderDetail(); };
+  $("#copyReel")?.addEventListener("click", async () => { collectForm(); try { await navigator.clipboard.writeText(reelPlainText(p)); toast("已複製腳本"); } catch { toast("無法複製，請手動選取", true); } });
+  $("#dlReel")?.addEventListener("click", () => {
+    collectForm();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([reelPlainText(p)], { type: "text/plain;charset=utf-8" }));
+    a.download = `${splitLocal(p.publish_at)[0] || "reel"}-reel-script.txt`; a.style.display = "none";
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  });
 }
 
 function renderDetail(selectedMedia = 0) {
@@ -721,6 +818,7 @@ function renderDetail(selectedMedia = 0) {
     collectForm(); p.checks.splice(+b.dataset.resolve, 1); stamp(p, "check resolved by reviewer", c.message); renderDetail();
   };
   $("#uploadBtn")?.addEventListener("click", uploadVideo);
+  if (p.reel_script) wireReel(p);
   $("#randTime")?.addEventListener("click", () => { $("#fTime").value = randomSlot(); collectForm(); renderDetail(selectedMedia); toast(`時間改為 ${$("#fTime").value}，記得儲存或核准`); });
   $("#addPage")?.addEventListener("click", () => { collectForm(); const pg = p.design_text; pg.splice(Math.max(pg.length - 1, 1), 0, { name: "新頁", text: "標題\n\n💡 重點" }); renderDetail(); });
   for (const b of document.querySelectorAll("[data-delpage]")) b.onclick = () => { if (!confirm("刪除這一頁？")) return; collectForm(); p.design_text.splice(+b.dataset.delpage, 1); renderDetail(); };
